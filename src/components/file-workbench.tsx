@@ -52,7 +52,8 @@ export function FileWorkbench() {
 
   function downloadCleaned() {
     if (!cleaned) return;
-    const blob = new Blob([cleaned.output], { type: cleaned.mimeType });
+    const copy = cleaned.output.slice();
+    const blob = new Blob([copy.buffer], { type: cleaned.mimeType });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -61,7 +62,8 @@ export function FileWorkbench() {
     URL.revokeObjectURL(url);
   }
 
-  const isPdf = receipt?.file.format === "pdf";
+  const sanitizeBlocked = !receipt || !receipt.capabilities.sanitize;
+  const hasProvenance = Boolean(receipt?.summary.provenance);
 
   return (
     <section className="file-section" aria-label="File metadata scanner">
@@ -69,7 +71,7 @@ export function FileWorkbench() {
         <div>
           <p className="eyebrow">Phase 1 · files</p>
           <h2>Inspect metadata without uploading it.</h2>
-          <p>JPEG, PNG, WebP, DOCX and PDF are scanned in your browser. Sanitizing is conservative: privacy metadata is removed; provenance markers are preserved.</p>
+          <p>JPEG, PNG, WebP, DOCX and PDF are scanned in your browser. Privacy metadata can be sanitized only when doing so will not knowingly interfere with detected provenance.</p>
         </div>
         <span className="pill">20 MB local limit</span>
       </div>
@@ -94,10 +96,10 @@ export function FileWorkbench() {
 
           <div className="actions">
             <button className="primary" disabled={!file || busy} onClick={runInspection}>{busy ? "Working…" : "Inspect file"}</button>
-            <button className="secondary" disabled={!file || busy || isPdf} onClick={runSanitize}>Sanitize privacy metadata</button>
+            <button className="secondary" disabled={!file || busy || sanitizeBlocked} onClick={runSanitize}>{hasProvenance ? "Sanitization blocked" : "Sanitize privacy metadata"}</button>
             {cleaned && <button className="ghost" onClick={downloadCleaned}>Download cleaned copy</button>}
           </div>
-          <p className="privacy-note">No file API call is used in this phase. Processing stays in the browser tab.</p>
+          <p className="privacy-note">Inspect first. Files with detected provenance candidates are not modified because changing asset bytes can invalidate cryptographic bindings.</p>
           {error && <div className="error-card">{error}</div>}
         </div>
 
@@ -141,13 +143,15 @@ export function FileWorkbench() {
               <strong>Post-clean verification</strong>
               <div className="verification-stats">
                 <span>{cleaned.removed.length} removed</span>
-                <span>{cleaned.preserved.length} preserved</span>
                 <span>{cleaned.after.summary.removableByDefault} removable findings remain</span>
               </div>
               <p>The cleaned bytes were re-scanned before the download became available.</p>
             </div>
           )}
 
+          {hasProvenance && (
+            <div className="notice-card">A provenance candidate is present. Even if its metadata chunk is copied forward, changing other bytes can break the signed hard binding. This file is inspection-only until cryptographic verification is completed.</div>
+          )}
           {receipt?.file.format === "pdf" && (
             <div className="notice-card">PDF is inspection-only in Phase 1. Rewriting arbitrary PDFs safely requires a structure-aware writer that preserves cross-reference tables, signatures, forms and attachments.</div>
           )}
