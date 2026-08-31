@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     if (typeof existing === "string") {
       const balance = await initializeCreditAccount(existing);
       logEvent("guest_session_reused", { requestId: context.requestId, userIdHash: requestSubjectKey(request, existing), latencyMs: Date.now() - context.startedAt });
-      return apiOk(context, { userId: existing, isAnonymous: claims.data?.claims?.is_anonymous === true || claims.data?.claims?.is_anonymous === "true", balance });
+      return apiOk(context, { userId: existing, isAnonymous: claims.data?.claims?.is_anonymous === true, balance });
     }
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error || !data.user) {
