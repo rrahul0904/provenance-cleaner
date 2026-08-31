@@ -1,17 +1,22 @@
 # Security and content-handling rules
 
-- Do not log or persist raw pasted text, prompts, rewritten output, or uploaded file contents by default.
-- Never expose `SUPABASE_SECRET_KEY`, Stripe secret keys/webhook secrets, or AI credentials to browser code.
+- Do not log or persist raw pasted text, prompts, rewritten output or uploaded file contents by default.
+- Never expose `SUPABASE_SECRET_KEY`, Stripe secret/webhook keys, Turnstile secret, rate-limit salt, cron secret or AI credentials to browser code.
 - Authorize a verified user session before every elevated Supabase billing call.
-- Credit ledger rows are append-only; database updates/deletes are rejected.
-- Credit reservations are atomic and idempotent.
-- Never trust credit quantities, Stripe Price IDs, or user IDs supplied by the browser.
+- Credit ledger rows are append-only; database update/delete is rejected.
+- Credit reservations are atomic, idempotent and TTL-bound.
+- Never trust credit quantities, Stripe Price IDs, model IDs or user IDs supplied by the browser.
 - Checkout success redirects do not grant credits; only signature-verified webhooks do.
-- Verify Stripe against the unmodified raw request body and deduplicate events/grants.
-- Keep anonymous welcome credits at zero until bot protection exists.
-- Enforce request/minute and 24-hour AI-cost limits server-side.
+- Verify Stripe against the unmodified raw request body and deduplicate both events and session grants.
+- Phase 5 accepts Stripe test-mode server keys only.
+- Server-verify Turnstile on guest creation, semantic editing and Checkout; documented bypasses are non-production only.
+- Application burst limits use salted hashes and never intentionally persist raw IP addresses; database limits remain authoritative for economic safety.
+- Enforce content type, request byte limits and Zod schemas on JSON APIs.
+- Return request IDs and stable errors; never expose provider stack traces/secrets in production responses.
 - Validate file types by magic bytes and bound parser/model resource use.
-- Receipts contain metrics, hashes, billing IDs, and operation metadata—not document bodies.
+- Receipts contain metrics, hashes, billing IDs and operation metadata—not source document bodies.
 - Do not cache auth refresh responses across users.
 - Never use user-editable Supabase `user_metadata` for authorization.
+- OAuth redirect targets must be single-slash internal paths; protocol-relative targets are rejected.
+- CSP permits only the Turnstile origins and WebAssembly behavior required by current features while denying framing/object embedding.
 - Never label output “undetectable”, “detector-proof”, or “watermark removed” without first-party verification.
