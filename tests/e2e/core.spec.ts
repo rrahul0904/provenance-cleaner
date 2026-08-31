@@ -67,7 +67,7 @@ test("guest UX and Checkout do not mutate credits client-side", async ({ page })
   await account.getByRole("button", { name: "Start guest" }).click();
   await expect(account.getByText("Guest session")).toBeVisible();
   await expect(account.getByText(/5 available credits/)).toBeVisible();
-  await account.getByRole("button", { name: "+10" }).click();
+  await account.getByRole("button", { name: "+10", exact: true }).click();
   await expect(account.getByText("Checkout is not available.")).toBeVisible();
   await expect(account.getByText(/5 available credits/)).toBeVisible();
 });
