@@ -25,7 +25,7 @@ function webpChunk(type: string, data: Uint8Array) {
 }
 
 describe("file provenance engine", () => {
-  it("removes JPEG EXIF while preserving APP11 provenance candidates", () => {
+  it("blocks JPEG sanitization when an APP11 provenance candidate is present", () => {
     const jpeg = concatBytes([
       u8(0xff, 0xd8),
       jpegSegment(0xe1, concatBytes([text("Exif"), u8(0, 0), text("camera")])),
@@ -35,23 +35,33 @@ describe("file provenance engine", () => {
     const before = inspectFile(jpeg, "photo.jpg");
     expect(before.summary.privacyMetadata).toBe(1);
     expect(before.summary.provenance).toBe(1);
-
-    const cleaned = sanitizeFile(jpeg, "photo.jpg");
-    expect(cleaned.after.summary.privacyMetadata).toBe(0);
-    expect(cleaned.after.summary.provenance).toBe(1);
+    expect(before.capabilities.sanitize).toBe(false);
+    expect(() => sanitizeFile(jpeg, "photo.jpg")).toThrow(/cryptographically bound/i);
   });
 
-  it("removes PNG text metadata and preserves caBX", () => {
+  it("removes JPEG EXIF when no provenance candidate is present", () => {
+    const jpeg = concatBytes([
+      u8(0xff, 0xd8),
+      jpegSegment(0xe1, concatBytes([text("Exif"), u8(0, 0), text("camera")])),
+      u8(0xff, 0xd9),
+    ]);
+    const cleaned = sanitizeFile(jpeg, "photo.jpg");
+    expect(cleaned.before.summary.privacyMetadata).toBe(1);
+    expect(cleaned.after.summary.privacyMetadata).toBe(0);
+  });
+
+  it("blocks PNG sanitization when caBX provenance is present", () => {
     const png = concatBytes([
       u8(137, 80, 78, 71, 13, 10, 26, 10),
       pngChunk("tEXt", text("Author\0Example")),
       pngChunk("caBX", text("provenance")),
       pngChunk("IEND"),
     ]);
-    const cleaned = sanitizeFile(png, "image.png");
-    expect(cleaned.before.summary.removableByDefault).toBe(1);
-    expect(cleaned.after.summary.removableByDefault).toBe(0);
-    expect(cleaned.after.summary.provenance).toBe(1);
+    const receipt = inspectFile(png, "image.png");
+    expect(receipt.summary.removableByDefault).toBe(1);
+    expect(receipt.summary.provenance).toBe(1);
+    expect(receipt.capabilities.sanitize).toBe(false);
+    expect(() => sanitizeFile(png, "image.png")).toThrow(/cryptographically bound/i);
   });
 
   it("clears WebP EXIF/XMP chunks and their VP8X flags", () => {
