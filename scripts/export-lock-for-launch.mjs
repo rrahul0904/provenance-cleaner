@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { gzipSync } from "node:zlib";
 
 if (process.env.VERCEL_ENV !== "preview") {
@@ -16,21 +15,11 @@ mkdirSync(output, { recursive: true });
 const text = readFileSync(source, "utf8");
 const compressed = gzipSync(Buffer.from(text, "utf8"), { level: 9 });
 const encoded = compressed.toString("base64");
-const chunkSize = 16000;
-const partCount = Math.ceil(encoded.length / chunkSize);
 writeFileSync(`${output}/manifest.json`, JSON.stringify({
   chars: text.length,
   sha256: createHash("sha256").update(text).digest("hex"),
   gzipBytes: compressed.length,
   base64Chars: encoded.length,
-  partCount,
+  data: encoded,
 }));
-for (let index = 0; index < partCount; index += 1) {
-  const dir = `${output}/part-${index}`;
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(`${dir}/manifest.json`, JSON.stringify({ index, data: encoded.slice(index * chunkSize, (index + 1) * chunkSize) }));
-}
-const gitWorktree = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], { stdio: "ignore" }).status === 0;
-const gitDryRunPush = gitWorktree && spawnSync("git", ["push", "--dry-run", "origin", "HEAD:refs/heads/controlled-launch-verification"], { stdio: "ignore" }).status === 0;
-console.log(`Launch-only lock export: ${text.length} chars in ${partCount} part manifests.`);
-console.log(`Launch Git probe: worktree=${gitWorktree}; dryRunPush=${gitDryRunPush}`);
+console.log(`Launch-only lock export: ${text.length} chars in root manifest.`);
