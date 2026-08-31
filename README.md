@@ -2,7 +2,7 @@
 
 Working implementation inspired by the product mechanics reverse-engineered from Un-Claude, but positioned as an **AI provenance and content-hygiene platform** rather than an AI-detector bypass tool.
 
-## Phase 0 implemented
+## Implemented
 
 - Next.js 16.3.3 + React 19.2
 - Browser-side Unicode provenance scanner
@@ -13,6 +13,10 @@ Working implementation inspired by the product mechanics reverse-engineered from
 - JSON `/api/scan` endpoint for future SDK/API usage
 - Unit tests for safe removal and preservation behavior
 - Responsive product UI
+- Local JPEG/PNG/WebP/DOCX/PDF metadata inspection
+- Sanitized JPEG/PNG/WebP/DOCX output with post-clean re-verification
+- C2PA/JUMBF-style provenance markers preserved by default
+- PDF inspection-only guardrail until structure-aware rewriting is implemented
 
 ## Principles
 
@@ -39,4 +43,4 @@ npm run build
 
 ## Roadmap
 
-See `docs/ROADMAP.md` and `docs/ARCHITECTURE.md`.
+See `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, and `docs/PHASE_1.md`.
