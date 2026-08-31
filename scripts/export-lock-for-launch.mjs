@@ -18,7 +18,7 @@ const encoded = compressed.toString("base64");
 const chunkSize = 16000;
 const parts = [];
 for (let offset = 0, index = 0; offset < encoded.length; offset += chunkSize, index += 1) {
-  const name = `lock-${String(index).padStart(2, "0")}.b64`;
+  const name = `lock-${String(index).padStart(2, "0")}.txt`;
   const chunk = encoded.slice(offset, offset + chunkSize);
   writeFileSync(`${output}/${name}`, chunk, "utf8");
   parts.push({ name, chars: chunk.length });
