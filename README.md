@@ -14,16 +14,17 @@ Working implementation inspired by the product mechanics reverse-engineered from
 - Unit tests for safe removal and preservation behavior
 - Responsive product UI
 - Local JPEG/PNG/WebP/DOCX/PDF metadata inspection
-- Sanitized JPEG/PNG/WebP/DOCX output with post-clean re-verification
-- C2PA/JUMBF-style provenance markers preserved by default
+- Sanitized JPEG/PNG/WebP/DOCX output with post-clean re-verification when no provenance candidate is present
+- C2PA/JUMBF-style provenance candidates detected and protected from modification by default
 - PDF inspection-only guardrail until structure-aware rewriting is implemented
 
 ## Principles
 
 1. **Deterministic before generative.** Provenance findings should be inspectable and reproducible.
 2. **Do not corrupt language.** Invisible characters can be meaningful in RTL languages, Indic scripts, Persian, emoji, and typography.
-3. **Do not claim detector-proof output.** Statistical watermark removal is not represented as verified unless a first-party detector exists.
-4. **Receipts over promises.** Every transformation should report exactly what changed and what was preserved.
+3. **Protect signed provenance.** Changing asset bytes can invalidate cryptographic hard bindings, so provenance-bearing assets are inspection-only by default.
+4. **Do not claim detector-proof output.** Statistical watermark removal is not represented as verified unless a first-party detector exists.
+5. **Receipts over promises.** Every transformation should report exactly what changed and what was preserved.
 
 ## Run
 
