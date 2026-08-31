@@ -26,34 +26,39 @@
 - separation of heuristic candidates from cryptographic verification
 - browser E2E validation against official C2PA public test vectors pending
 
-## Phase 3 — semantic transformation engine
+## Phase 3 — semantics-preserving editing 🚧
 
-- protected-span extraction: quotes, URLs, numbers, dates, citations
-- chunk/section planner
-- optional non-origin model via Vercel AI Gateway
-- entity/numeric/date invariants
-- semantic similarity guardrails
-- n-gram overlap receipt
-- section-only retry on validator failure
+- protected-span extraction for quotes, URLs, emails, numbers, dates, citations and inline code
+- bounded chunk/section planner
+- Vercel AI Gateway via AI SDK 7
+- configurable Mistral editing model
+- protected-token and factual-invariant validation
+- mode-specific length guardrails
+- transparent n-gram/longest-shared-phrase receipt metrics
+- maximum two attempts on validation failure
+- browser E2E/model integration verification pending
+- dedicated named-entity and semantic-similarity validation still pending
 - no detector-proof or guaranteed watermark-removal claims
 
-## Phase 4 — accounts and credits
+## Phase 4 — accounts, credits and abuse controls
 
 - Supabase Auth
 - PostgreSQL operation ledger
 - atomic credit debit/refund
 - guest credits
 - Stripe checkout + webhook reconciliation
+- per-user/IP AI rate limits and cost ceilings
+- operation metadata/history without raw document bodies
 
 ## Phase 5 — production hardening
 
 - Cloudflare Turnstile / abuse controls
-- rate limits
 - structured redacted logs
 - privacy-preserving analytics
 - deletion guarantees
 - browser integration/e2e tests
-- Vercel deployment
+- Vercel preview and production deployment
+- security review of model/provider retention configuration
 
 ## Phase 6 — platform expansion
 

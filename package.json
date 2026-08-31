@@ -1,6 +1,6 @@
 {
   "name": "provenance-cleaner",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "engines": {
     "node": ">=22.22.0"
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@contentauth/c2pa-web": "0.14.3",
+    "ai": "7.0.85",
     "fflate": "0.8.2",
     "next": "16.3.3",
     "react": "19.2.8",

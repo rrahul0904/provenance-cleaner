@@ -1,5 +1,6 @@
 import { ScannerWorkbench } from "@/components/scanner-workbench";
 import { FileWorkbench } from "@/components/file-workbench";
+import { TransformWorkbench } from "@/components/transform-workbench";
 
 export default function Home() {
   return (
@@ -9,39 +10,40 @@ export default function Home() {
         <nav aria-label="Primary">
           <a href="#scanner">Text</a>
           <a href="#files">Files</a>
+          <a href="#editor">Editor</a>
           <a href="#principles">Principles</a>
-          <a href="https://github.com" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://github.com/rrahul0904/provenance-cleaner" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
       </header>
 
       <section className="hero shell">
         <div className="hero-copy">
           <p className="eyebrow">AI provenance & content hygiene</p>
-          <h1>See what your document is carrying.</h1>
-          <p className="lede">Inspect invisible Unicode and provenance signals, remove only what is safe, and keep a receipt of every change.</p>
+          <h1>See what your content is carrying.</h1>
+          <p className="lede">Inspect invisible Unicode and provenance signals, remove only what is safe, edit prose with factual guardrails, and keep a receipt of every change.</p>
           <div className="hero-badges">
-            <span>Deterministic</span><span>Explainable</span><span>No detector theater</span>
+            <span>Deterministic first</span><span>Explainable</span><span>No detector theater</span>
           </div>
         </div>
         <div className="hero-card" aria-hidden="true">
           <div className="terminal-line"><span>SCAN</span><strong>12,408 chars</strong></div>
-          <div className="terminal-line"><span>ZERO WIDTH</span><strong>3</strong></div>
-          <div className="terminal-line"><span>BIDI</span><strong>1 review</strong></div>
-          <div className="terminal-line"><span>SAFE CLEAN</span><strong>ready</strong></div>
+          <div className="terminal-line"><span>PROTECTED</span><strong>14 / 14</strong></div>
+          <div className="terminal-line"><span>PROVENANCE</span><strong>verified</strong></div>
+          <div className="terminal-line"><span>EDIT RECEIPT</span><strong>passed</strong></div>
         </div>
       </section>
 
       <div id="scanner" className="shell"><ScannerWorkbench /></div>
-
       <div id="files" className="shell"><FileWorkbench /></div>
+      <div id="editor" className="shell"><TransformWorkbench /></div>
 
       <section id="principles" className="principles shell">
-        <div><span>01</span><h3>Inspect first</h3><p>Every finding identifies the exact Unicode code point and its position.</p></div>
-        <div><span>02</span><h3>Preserve meaning</h3><p>Language and emoji-sensitive controls are review-required, not silently deleted.</p></div>
-        <div><span>03</span><h3>Prove changes</h3><p>Cleaning produces a receipt instead of an unverifiable “watermark removed” claim.</p></div>
+        <div><span>01</span><h3>Inspect first</h3><p>Findings are concrete: exact Unicode code points, file metadata categories, hashes, and provenance validation states.</p></div>
+        <div><span>02</span><h3>Preserve meaning</h3><p>Language-sensitive controls and signed provenance are not silently destroyed, and semantic edits protect factual spans before generation.</p></div>
+        <div><span>03</span><h3>Prove changes</h3><p>Every cleaning or editing workflow produces measurable verification instead of an unverifiable “watermark removed” claim.</p></div>
       </section>
 
-      <footer className="shell footer">Phase 1 · Text + file provenance scanner · Working product name</footer>
+      <footer className="shell footer">Phase 3 · Provenance inspection + metadata hygiene + validated semantic editing · Working product name</footer>
     </main>
   );
 }
