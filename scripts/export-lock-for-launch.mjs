@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { gzipSync } from "node:zlib";
 
 if (process.env.VERCEL_ENV !== "preview") {
@@ -29,4 +30,7 @@ for (let index = 0; index < partCount; index += 1) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(`${dir}/manifest.json`, JSON.stringify({ index, data: encoded.slice(index * chunkSize, (index + 1) * chunkSize) }));
 }
+const gitWorktree = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], { stdio: "ignore" }).status === 0;
+const gitDryRunPush = gitWorktree && spawnSync("git", ["push", "--dry-run", "origin", "HEAD:refs/heads/controlled-launch-verification"], { stdio: "ignore" }).status === 0;
 console.log(`Launch-only lock export: ${text.length} chars in ${partCount} part manifests.`);
+console.log(`Launch Git probe: worktree=${gitWorktree}; dryRunPush=${gitDryRunPush}`);
