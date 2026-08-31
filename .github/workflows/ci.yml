@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -17,8 +17,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
+      - name: Bootstrap lockfile once
+        id: lockfile
+        shell: bash
+        run: |
+          if [[ -f package-lock.json ]]; then
+            echo "generated=false" >> "$GITHUB_OUTPUT"
+          else
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            echo "generated=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Commit generated lockfile
+        if: steps.lockfile.outputs.generated == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: commit npm lockfile"
+          git push origin "HEAD:${{ github.head_ref }}"
       - name: Install pinned dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Unit tests
         run: npm test
       - name: Lint
@@ -37,6 +56,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
-      - run: npm install --no-audit --no-fund
+      - name: Require committed lockfile
+        shell: bash
+        run: test -f package-lock.json
+      - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
