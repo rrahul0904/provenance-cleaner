@@ -15,11 +15,19 @@ mkdirSync(output, { recursive: true });
 const text = readFileSync(source, "utf8");
 const compressed = gzipSync(Buffer.from(text, "utf8"), { level: 9 });
 const encoded = compressed.toString("base64");
-writeFileSync(`${output}/lock.b64`, encoded, "utf8");
+const chunkSize = 16000;
+const parts = [];
+for (let offset = 0, index = 0; offset < encoded.length; offset += chunkSize, index += 1) {
+  const name = `lock-${String(index).padStart(2, "0")}.b64`;
+  const chunk = encoded.slice(offset, offset + chunkSize);
+  writeFileSync(`${output}/${name}`, chunk, "utf8");
+  parts.push({ name, chars: chunk.length });
+}
 writeFileSync(`${output}/manifest.json`, JSON.stringify({
   chars: text.length,
   sha256: createHash("sha256").update(text).digest("hex"),
   gzipBytes: compressed.length,
   base64Chars: encoded.length,
+  parts,
 }, null, 2));
-console.log(`Launch-only lock export: ${text.length} chars, ${encoded.length} base64 chars.`);
+console.log(`Launch-only lock export: ${text.length} chars, ${parts.length} base64 part(s).`);
