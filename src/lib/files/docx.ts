@@ -5,7 +5,10 @@ const CORE_FIELDS = ["dc:creator", "cp:lastModifiedBy", "dc:title", "dc:subject"
 const APP_FIELDS = ["Application", "AppVersion", "Company", "Manager", "Template"];
 
 function hasMeaningfulContent(xml: string, tags: string[]) {
-  return tags.some((tag) => new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, "i").test(xml));
+  return tags.some((tag) => {
+    const match = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i").exec(xml);
+    return Boolean(match?.[1]?.trim());
+  });
 }
 
 function blankTags(xml: string, tags: string[]) {
