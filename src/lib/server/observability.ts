@@ -6,7 +6,7 @@ type MetaValue = string | number | boolean | null | undefined;
 export type OperationalMetadata = Record<string, MetaValue>;
 
 export function hashIdentifier(value: string) {
-  const salt = process.env.RATE_LIMIT_HASH_SALT || "local-development-only";
+  const salt = process.env.RATE_LIMIT_HASH_SALT || process.env.VERCEL_OIDC_TOKEN || "local-development-only";
   return createHash("sha256").update(`${salt}:${value}`).digest("hex").slice(0, 32);
 }
 
