@@ -4,29 +4,37 @@ Working implementation inspired by the product mechanics reverse-engineered from
 
 ## Implemented
 
-- Next.js 16.3.3 + React 19.2
+### Deterministic text hygiene
 - Browser-side Unicode provenance scanner
 - Exact code-point findings with offsets and explanations
-- Conservative sanitization mode
-- Review-required handling for ZWJ/ZWNJ, bidi controls, Unicode tag characters, and typographic spaces
-- Verification receipt model
-- JSON `/api/scan` endpoint for future SDK/API usage
-- Unit tests for safe removal and preservation behavior
-- Responsive product UI
-- Local JPEG/PNG/WebP/DOCX/PDF metadata inspection
-- Sanitized JPEG/PNG/WebP/DOCX output with post-clean re-verification when no provenance candidate is present
-- C2PA/JUMBF-style provenance candidates detected and protected from modification by default
-- PDF inspection-only guardrail until structure-aware rewriting is implemented
+- Conservative sanitization with review-required handling for linguistically meaningful controls
+- JSON `/api/scan` endpoint
+
+### File provenance and privacy metadata
+- Local JPEG/PNG/WebP/DOCX/PDF inspection
+- JPEG/PNG/WebP/DOCX privacy-metadata sanitization when no provenance candidate is present
+- PDF inspection-only guardrail
+- Provenance-bearing assets protected from modification by default
+- Mandatory post-sanitize re-scan
+
+### Verified provenance — Phase 2
+- Official `@contentauth/c2pa-web` browser verifier, lazy-loaded on demand
+- Structured C2PA states: valid, invalid, untrusted, unverifiable, not present, unsupported
+- SHA-256 hash for the original and sanitized asset
+- Downloadable JSON verification receipts containing hashes and findings, never raw content
+- Separate cryptographic validation from heuristic provenance-candidate detection
 
 ## Principles
 
-1. **Deterministic before generative.** Provenance findings should be inspectable and reproducible.
+1. **Deterministic before generative.** Findings should be inspectable and reproducible.
 2. **Do not corrupt language.** Invisible characters can be meaningful in RTL languages, Indic scripts, Persian, emoji, and typography.
 3. **Protect signed provenance.** Changing asset bytes can invalidate cryptographic hard bindings, so provenance-bearing assets are inspection-only by default.
 4. **Do not claim detector-proof output.** Statistical watermark removal is not represented as verified unless a first-party detector exists.
 5. **Receipts over promises.** Every transformation should report exactly what changed and what was preserved.
 
-## Run
+## Runtime
+
+Node.js 22.22 or later is required by the current official C2PA JavaScript SDK.
 
 ```bash
 npm install
@@ -35,13 +43,14 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-## Tests
+## Verification
 
 ```bash
 npm test
+npm run lint
 npm run build
 ```
 
 ## Roadmap
 
-See `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, and `docs/PHASE_1.md`.
+See `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/PHASE_1.md`, and `docs/PHASE_2.md`.

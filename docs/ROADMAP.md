@@ -8,27 +8,36 @@
 - local-first UI
 - tests
 
-## Phase 1 — file provenance engine
+## Phase 1 — file provenance and metadata hygiene ✅
 
-- upload pipeline with size/type validation
-- PNG/JPEG/WebP EXIF + XMP inspection
-- C2PA manifest inspection
+- JPEG/PNG/WebP metadata inspection
 - DOCX core/app/custom property inspection
 - PDF metadata inspection
-- sanitize-to-new-file workflow
-- post-sanitize re-scan proving metadata state
+- sanitize-to-new-file workflow for non-provenance assets
+- post-sanitize re-scan
+- provenance-bearing assets blocked from modification by default
 
-## Phase 2 — rewrite engine
+## Phase 2 — verified provenance 🚧
+
+- official `@contentauth/c2pa-web` verification
+- structured validation states
+- SHA-256 before/after hashes
+- downloadable JSON verification receipts
+- separation of heuristic candidates from cryptographic verification
+- browser E2E validation against official C2PA public test vectors pending
+
+## Phase 3 — semantic transformation engine
 
 - protected-span extraction: quotes, URLs, numbers, dates, citations
 - chunk/section planner
-- non-origin model via Vercel AI Gateway
+- optional non-origin model via Vercel AI Gateway
 - entity/numeric/date invariants
 - semantic similarity guardrails
 - n-gram overlap receipt
 - section-only retry on validator failure
+- no detector-proof or guaranteed watermark-removal claims
 
-## Phase 3 — accounts and credits
+## Phase 4 — accounts and credits
 
 - Supabase Auth
 - PostgreSQL operation ledger
@@ -36,17 +45,17 @@
 - guest credits
 - Stripe checkout + webhook reconciliation
 
-## Phase 4 — production hardening
+## Phase 5 — production hardening
 
 - Cloudflare Turnstile / abuse controls
 - rate limits
 - structured redacted logs
-- Sentry/PostHog instrumentation
+- privacy-preserving analytics
 - deletion guarantees
-- integration/e2e tests
+- browser integration/e2e tests
 - Vercel deployment
 
-## Phase 5 — platform expansion
+## Phase 6 — platform expansion
 
 - API keys
 - CLI
