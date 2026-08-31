@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -14,30 +14,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
-      - name: Bootstrap lockfile once
-        id: lockfile
-        shell: bash
-        run: |
-          if [[ -f package-lock.json ]]; then
-            echo "generated=false" >> "$GITHUB_OUTPUT"
-          else
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-            echo "generated=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Commit generated lockfile
-        if: steps.lockfile.outputs.generated == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "chore: commit npm lockfile"
-          git push origin "HEAD:${{ github.head_ref }}"
+      - name: Require committed lockfile
+        run: test -f package-lock.json
       - name: Install pinned dependencies
         run: npm ci --no-audit --no-fund
       - name: Unit tests
@@ -48,6 +29,22 @@ jobs:
         run: npm run build
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
+      - name: Controlled-launch static gate
+        run: npm run release:check
+        env:
+          NEXT_PUBLIC_APP_URL: https://preview.invalid
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: test
+          SUPABASE_SECRET_KEY: test
+          STRIPE_SECRET_KEY: sk_test_ci_placeholder
+          STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
+          TURNSTILE_SECRET_KEY: test
+          RATE_LIMIT_HASH_SALT: test-test-test-test-test-test
+          CRON_SECRET: test-test-test-test-test-test
+          STRIPE_PRICE_STARTER: price_test
+          STRIPE_PRICE_PLUS: price_test
+          STRIPE_PRICE_PRO: price_test
 
   e2e:
     needs: verify
@@ -55,13 +52,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
       - name: Require committed lockfile
-        shell: bash
         run: test -f package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
