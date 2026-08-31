@@ -40,13 +40,20 @@ export function inspectFile(bytes: Uint8Array, name: string, scannedAt = new Dat
   else if (format === "docx") findings = inspectDocx(bytes);
   else findings = inspectPdf(bytes);
 
+  const summary = summarize(findings);
+  const hasProvenance = summary.provenance > 0;
+
   return {
     version: "file-scan-v1",
     scannedAt,
     file: { name, format, mimeType: MIME[format], bytes: bytes.length },
     findings,
-    summary: summarize(findings),
-    capabilities: { inspect: true, sanitize: format !== "pdf", provenanceRemoval: false },
+    summary,
+    capabilities: {
+      inspect: true,
+      sanitize: format !== "pdf" && !hasProvenance,
+      provenanceRemoval: false,
+    },
   };
 }
 
@@ -59,6 +66,9 @@ export function sanitizeFile(bytes: Uint8Array, name: string): FileSanitizeResul
   const before = inspectFile(bytes, name);
   const format = before.file.format;
   if (format === "pdf") throw new Error("PDF sanitization is intentionally disabled in Phase 1; inspection is available.");
+  if (before.summary.provenance > 0) {
+    throw new Error("Sanitization is blocked because provenance metadata may be cryptographically bound to the original asset bytes. Verify Content Credentials before editing the file.");
+  }
 
   let output: Uint8Array;
   if (format === "jpeg") output = inspectJpeg(bytes).sanitize();
