@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-function pngChunk(type: string, data = Buffer.alloc(0)) {
+function pngChunk(type: string, data: Uint8Array = Buffer.alloc(0)) {
   const typeBytes = Buffer.from(type, "ascii");
   const length = Buffer.alloc(4); length.writeUInt32BE(data.length);
   return Buffer.concat([length, typeBytes, data, Buffer.alloc(4)]);
 }
-function pngWith(type: string, data: Buffer) { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk(type, data), pngChunk("IEND")]); }
+function pngWith(type: string, data: Uint8Array) { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk(type, data), pngChunk("IEND")]); }
 
 async function open(page: import("@playwright/test").Page) { await page.goto("/"); await expect(page.getByRole("heading", { name: /See what your content is carrying/i })).toBeVisible(); }
 
