@@ -10,12 +10,35 @@ export function ScannerWorkbench() {
   const [text, setText] = useState(DEMO_TEXT);
   const [receipt, setReceipt] = useState<TextScanReceipt | null>(null);
   const [sanitation, setSanitation] = useState<SanitizeReceipt | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const canScan = text.length > 0;
 
   const grouped = useMemo(() => {
     if (!receipt) return [];
     return Object.entries(receipt.summary.byCategory).filter(([, count]) => count > 0);
   }, [receipt]);
+
+  function replaceText(next: string, sourceFile: string | null = null) {
+    setText(next);
+    setFileName(sourceFile);
+    setReceipt(null);
+    setSanitation(null);
+    setError(null);
+  }
+
+  async function loadTxt(file: File | null) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".txt") && file.type !== "text/plain") {
+      setError("Choose a plain-text .txt file.");
+      return;
+    }
+    try {
+      replaceText(await file.text(), file.name);
+    } catch {
+      setError("Could not read this text file.");
+    }
+  }
 
   function runScan() {
     setReceipt(scanText(text));
@@ -25,7 +48,7 @@ export function ScannerWorkbench() {
   function cleanConservatively() {
     const next = sanitizeText(text, "conservative");
     setSanitation(next);
-    setReceipt(scanText(text));
+    setReceipt(scanText(next.output));
   }
 
   return (
@@ -33,27 +56,32 @@ export function ScannerWorkbench() {
       <div className="panel editor-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Text scanner</p>
+            <p className="eyebrow">Free text scanner</p>
             <h2>Inspect before you clean.</h2>
           </div>
-          <span className="pill">Local-first Phase 0</span>
+          <span className="pill">0 credits · no account</span>
+        </div>
+        <div className="actions">
+          <label className="secondary" style={{ cursor: "pointer" }}>
+            Upload .txt
+            <input type="file" accept=".txt,text/plain" hidden onChange={event => void loadTxt(event.target.files?.[0] ?? null)} />
+          </label>
+          <button className="ghost" onClick={() => replaceText(DEMO_TEXT)}>Try example</button>
+          {fileName && <span className="pill">{fileName}</span>}
         </div>
         <textarea
           value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-            setReceipt(null);
-            setSanitation(null);
-          }}
+          onChange={(event) => replaceText(event.target.value)}
           spellCheck={false}
           aria-label="Text to scan"
         />
         <div className="actions">
-          <button className="primary" onClick={runScan} disabled={!canScan}>Scan text</button>
+          <button className="primary" onClick={runScan} disabled={!canScan}>Scan text — free</button>
           <button className="secondary" onClick={cleanConservatively} disabled={!canScan}>Clean safe findings</button>
-          <button className="ghost" onClick={() => { setText(""); setReceipt(null); setSanitation(null); }}>Clear</button>
+          <button className="ghost" onClick={() => replaceText("")}>Clear</button>
         </div>
-        <p className="privacy-note">Phase 0 scans in your browser. No text is stored by this prototype.</p>
+        <p className="privacy-note">Scanning and deterministic Unicode cleaning run in your browser and do not consume credits. Plain-text uploads are read locally.</p>
+        {error && <div className="error-card">{error}</div>}
       </div>
 
       <div className="panel receipt-panel">
@@ -66,7 +94,7 @@ export function ScannerWorkbench() {
         </div>
 
         {!receipt ? (
-          <div className="empty-state">Paste text and run a scan to see exact code points, locations, and removal safety.</div>
+          <div className="empty-state">Paste text or upload a .txt file and run a scan to see exact code points, locations, and removal safety.</div>
         ) : (
           <>
             <div className="metrics">
@@ -89,6 +117,7 @@ export function ScannerWorkbench() {
                   <div>
                     <strong>{finding.codePoint} · {finding.characterName}</strong>
                     <p>{finding.description}</p>
+                    <small>index {finding.index}</small>
                   </div>
                   <span className={finding.disposition === "safe_remove" ? "tag-safe" : "tag-review"}>{finding.disposition === "safe_remove" ? "safe remove" : "review"}</span>
                 </article>
@@ -104,7 +133,7 @@ export function ScannerWorkbench() {
               <button className="copy" onClick={() => navigator.clipboard.writeText(sanitation.output)}>Copy</button>
             </div>
             <pre>{sanitation.output || "(empty)"}</pre>
-            <p>{sanitation.removed.length} removed · {sanitation.preservedForReview.length} preserved for review</p>
+            <p>{sanitation.removed.length} removed · {sanitation.preservedForReview.length} preserved for review · post-clean scan {scanText(sanitation.output).summary.total === 0 ? "clear" : "requires review"}</p>
           </div>
         )}
       </div>
