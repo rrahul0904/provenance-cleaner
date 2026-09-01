@@ -18,6 +18,10 @@ export type Database = {
         Args: { p_purchase_id: string; p_session_id: string; p_user_id: string };
         Returns: Json;
       };
+      billing_claim_signup_promo: {
+        Args: { p_credits: number; p_email_fingerprint: string; p_user_id: string };
+        Returns: Json;
+      };
       billing_commit_reservation: {
         Args: { p_reservation_id: string; p_user_id: string };
         Returns: Json;
