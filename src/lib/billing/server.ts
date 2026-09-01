@@ -15,10 +15,7 @@ async function rpc<Name extends BillingFunctionName>(name: Name, args: BillingAr
   if (error) throwBillingError(error.message);
   return data as Json;
 }
-
-function jsonObject(value: Json): JsonObject {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
-}
+function jsonObject(value: Json): JsonObject { return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {}; }
 function numeric(value: unknown) { return typeof value === "number" ? value : Number(value ?? 0); }
 function balanceFrom(data: JsonObject): CreditBalance { return { settled: numeric(data.settled), held: numeric(data.held), available: numeric(data.available) }; }
 function throwBillingError(message: string): never {
@@ -33,6 +30,8 @@ export async function grantGuestPromoCredits(userId: string) { const data = json
 export async function claimSignupPromoCredits(userId: string, emailFingerprint: string) { const data = jsonObject(await rpc("billing_claim_signup_promo", { p_user_id: userId, p_email_fingerprint: emailFingerprint, p_credits: SIGNUP_PROMO_CREDITS })); return { balance: balanceFrom(data), granted: Boolean(data.granted) }; }
 export async function getCreditBalance(userId: string) { return balanceFrom(jsonObject(await rpc("billing_get_balance", { p_user_id: userId }))); }
 export async function getAccountHistory(userId: string, limit = 100) { return rpc("billing_get_account_history", { p_user_id: userId, p_limit: Math.max(1, Math.min(200, limit)) }); }
+export async function getRefundQuote(userId: string, purchaseId: string) { return rpc("billing_get_refund_quote", { p_user_id: userId, p_purchase_id: purchaseId }); }
+export async function recordPurchaseRefund(input: { userId: string; purchaseId: string; refundId: string; credits: number; amount: number; currency: string }) { return rpc("billing_record_purchase_refund", { p_user_id: input.userId, p_purchase_id: input.purchaseId, p_refund_id: input.refundId, p_credits: input.credits, p_amount: input.amount, p_currency: input.currency }); }
 export async function reserveCredits(userId: string, operationKey: string, credits: number): Promise<CreditReservation> { const limits = getBillingLimits(); const data = jsonObject(await rpc("billing_reserve_credits", { p_user_id: userId, p_operation_key: operationKey, p_credits: credits, p_requests_per_minute: limits.requestsPerMinute, p_credits_per_24h: limits.creditsPer24h, p_ttl_minutes: limits.reservationTtlMinutes })); return { reservationId: String(data.reservation_id), status: String(data.status) as CreditReservation["status"], credits: numeric(data.credits), created: Boolean(data.created), balance: balanceFrom(data) }; }
 export async function commitReservation(userId: string, reservationId: string) { return balanceFrom(jsonObject(await rpc("billing_commit_reservation", { p_user_id: userId, p_reservation_id: reservationId }))); }
 export async function releaseReservation(userId: string, reservationId: string, reason: string) { await rpc("billing_release_reservation", { p_user_id: userId, p_reservation_id: reservationId, p_reason: reason.slice(0, 120) }); }
