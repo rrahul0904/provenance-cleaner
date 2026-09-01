@@ -54,7 +54,65 @@ begin
   return v_balance || jsonb_build_object('granted', v_inserted = 1);
 end $$;
 
+create or replace function public.billing_get_account_history(
+  p_user_id uuid,
+  p_limit int default 100
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_limit int := greatest(1, least(coalesce(p_limit,100), 200));
+  v_ledger jsonb;
+  v_purchases jsonb;
+begin
+  perform public.billing_ensure_account(p_user_id);
+
+  select coalesce(jsonb_agg(row_data order by created_at desc), '[]'::jsonb)
+  into v_ledger
+  from (
+    select jsonb_build_object(
+      'id', id,
+      'delta', delta,
+      'kind', kind,
+      'sourceKey', source_key,
+      'createdAt', created_at,
+      'metadata', metadata
+    ) as row_data, created_at
+    from billing.credit_ledger
+    where user_id = p_user_id
+    order by created_at desc
+    limit v_limit
+  ) ledger_rows;
+
+  select coalesce(jsonb_agg(row_data order by created_at desc), '[]'::jsonb)
+  into v_purchases
+  from (
+    select jsonb_build_object(
+      'id', id,
+      'packId', pack_id,
+      'credits', credits,
+      'status', status,
+      'createdAt', created_at,
+      'completedAt', completed_at
+    ) as row_data, created_at
+    from billing.checkout_purchases
+    where user_id = p_user_id
+    order by created_at desc
+    limit v_limit
+  ) purchase_rows;
+
+  return jsonb_build_object(
+    'balance', public.billing_get_balance(p_user_id),
+    'ledger', v_ledger,
+    'purchases', v_purchases
+  );
+end $$;
+
 revoke all on function public.billing_claim_signup_promo(uuid,text,bigint) from public, anon, authenticated;
+revoke all on function public.billing_get_account_history(uuid,int) from public, anon, authenticated;
 grant execute on function public.billing_claim_signup_promo(uuid,text,bigint) to service_role;
+grant execute on function public.billing_get_account_history(uuid,int) to service_role;
 
 comment on table billing.promo_claims is 'Non-reversible keyed email fingerprints used only to prevent repeated signup promotional-credit grants after account deletion/recreation.';
