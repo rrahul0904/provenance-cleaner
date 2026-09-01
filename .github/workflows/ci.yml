@@ -41,6 +41,7 @@ jobs:
           STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
           TURNSTILE_SECRET_KEY: test
           RATE_LIMIT_HASH_SALT: test-test-test-test-test-test
+          PROMO_FINGERPRINT_SECRET: ci-only-placeholder-secret-32-characters-minimum
           CRON_SECRET: test-test-test-test-test-test
           STRIPE_PRICE_STARTER: price_test
           STRIPE_PRICE_PLUS: price_test

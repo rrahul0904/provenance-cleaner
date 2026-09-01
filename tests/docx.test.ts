@@ -22,4 +22,12 @@ describe("DOCX metadata sanitizer", () => {
     expect(cleaned.removed).toHaveLength(3);
     expect(cleaned.after.summary.privacyMetadata).toBe(0);
   });
+
+  it("rejects highly compressed DOCX entries before expansion", () => {
+    const bomb = zipSync({
+      "[Content_Types].xml": strToU8("<Types/>"),
+      "word/document.xml": new Uint8Array(2 * 1024 * 1024).fill(65),
+    }, { level: 9 });
+    expect(() => inspectFile(bomb, "bomb.docx")).toThrow(/suspicious compression ratio/i);
+  });
 });

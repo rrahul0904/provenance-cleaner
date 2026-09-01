@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 const DEFAULT_MODEL = "mistral/mistral-medium-3.5";
 const MAX_ATTEMPTS = 2;
 const PREVIEW_RELEASE_SMOKE_MARKER = "[[PROVENANCE_PREVIEW_RELEASE_SMOKE]]";
-const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().min(20).max(250_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
+const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().trim().min(20).max(250_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
 
 async function generateAttempt(protectedText: string, mode: TransformMode, model: string, retryFeedback?: string) {
   const outputs: string[] = [];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { countWords, creditCostForText, MAX_REWRITE_WORDS } from "@/lib/product-contract";
 import type { TransformMode, TransformResult } from "@/lib/transform";
 import { TurnstileWidget } from "./turnstile-widget";
@@ -28,22 +28,41 @@ export function TransformWorkbench() {
   const [busy, setBusy] = useState(false);
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [challengeReset, setChallengeReset] = useState(0);
+  const revision = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
   const onChallenge = useCallback((token: string | null) => setChallengeToken(token), []);
   const selectedMode = useMemo(() => MODES.find(item => item.id === mode)!, [mode]);
   const words = useMemo(() => countWords(text), [text]);
   const estimatedCredits = useMemo(() => creditCostForText(text), [text]);
   const overLimit = words > MAX_REWRITE_WORDS;
 
+  function invalidateResult() {
+    revision.current += 1;
+    activeRequest.current?.abort();
+    setResult(null);
+    setError(null);
+  }
+
   async function transform() {
     if (!challengeToken || overLimit) return;
+    const requestRevision = revision.current;
+    const controller = new AbortController();
+    activeRequest.current?.abort();
+    activeRequest.current = controller;
     setBusy(true); setError(null); setResult(null);
     try {
-      const response = await fetch("/api/transform", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, challengeToken }) });
+      const response = await fetch("/api/transform", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, challengeToken }), signal: controller.signal });
       const payload = await response.json();
       if (!response.ok) throw new Error(messageFrom(payload, "The edit could not be completed."));
+      if (controller.signal.aborted || revision.current !== requestRevision) return;
       setResult(payload as TransformResult);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "The edit could not be completed."); }
-    finally { setBusy(false); setChallengeToken(null); setChallengeReset(value => value + 1); }
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      if (revision.current === requestRevision) setError(cause instanceof Error ? cause.message : "The edit could not be completed.");
+    } finally {
+      if (activeRequest.current === controller) activeRequest.current = null;
+      setBusy(false); setChallengeToken(null); setChallengeReset(value => value + 1);
+    }
   }
 
   async function copyResult() { if (result) await navigator.clipboard.writeText(result.text); }
@@ -51,12 +70,12 @@ export function TransformWorkbench() {
     <div className="section-heading"><div><p className="eyebrow">Protected semantic editing</p><h2>Edit the prose. Keep the facts.</h2><p>Protected spans and deterministic validation sit around the language model. Each operation accepts up to {MAX_REWRITE_WORDS.toLocaleString()} words and commits credits only after the edit passes preservation checks.</p></div><span className="pill">~{estimatedCredits} credit{estimatedCredits === 1 ? "" : "s"}</span></div>
     <div className="transform-grid"><div className="panel transform-input-panel">
       <div className="panel-heading"><div><p className="eyebrow">Source</p><h2>Choose an editing goal</h2></div><span className={`pill ${overLimit ? "warn" : ""}`}>{words.toLocaleString()} / {MAX_REWRITE_WORDS.toLocaleString()} words</span></div>
-      <div className="mode-row" role="group" aria-label="Editing mode">{MODES.map(item => <button key={item.id} type="button" className={`mode-button ${mode === item.id ? "active" : ""}`} onClick={() => setMode(item.id)}>{item.label}</button>)}</div>
+      <div className="mode-row" role="group" aria-label="Editing mode">{MODES.map(item => <button key={item.id} type="button" className={`mode-button ${mode === item.id ? "active" : ""}`} onClick={() => { if (mode !== item.id) invalidateResult(); setMode(item.id); }}>{item.label}</button>)}</div>
       <p className="mode-description">{selectedMode.description}</p>
-      <textarea value={text} maxLength={250_000} placeholder="Paste prose you want to edit…" onChange={event => setText(event.target.value)} />
+      <textarea value={text} maxLength={250_000} placeholder="Paste prose you want to edit…" onChange={event => { invalidateResult(); setText(event.target.value); }} />
       {overLimit && <div className="error-card">This edit is {words.toLocaleString()} words. Split it into parts of at most {MAX_REWRITE_WORDS.toLocaleString()} words.</div>}
       <TurnstileWidget action="transform" onToken={onChallenge} resetKey={challengeReset} />
-      <div className="actions"><button className="primary" disabled={busy || text.trim().length < 20 || overLimit || !challengeToken} onClick={transform}>{busy ? "Validating edit…" : `Edit for ${selectedMode.label.toLowerCase()}`}</button><button className="ghost" disabled={busy || !text} onClick={() => { setText(""); setResult(null); setError(null); }}>Clear</button></div>
+      <div className="actions"><button className="primary" disabled={busy || text.trim().length < 20 || overLimit || !challengeToken} onClick={transform}>{busy ? "Validating edit…" : `Edit for ${selectedMode.label.toLowerCase()}`}</button><button className="ghost" disabled={busy || !text} onClick={() => { invalidateResult(); setText(""); }}>Clear</button></div>
       <p className="privacy-note">Text stays local until you explicitly run an edit. Raw source/result text is not intentionally persisted or written to operational logs.</p>{error && <div className="error-card">{error}</div>}
     </div><div className="panel transform-output-panel">
       <div className="panel-heading"><div><p className="eyebrow">Validated output</p><h2>{result ? "Edit passed preservation checks" : "Ready when you are"}</h2></div>{result && <span className="score ok">Validated</span>}</div>
