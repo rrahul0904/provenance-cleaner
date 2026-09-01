@@ -1,3 +1,4 @@
+import { GUEST_PROMO_CREDITS, SIGNUP_PROMO_CREDITS } from "@/lib/product-contract";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { getBillingLimits, getWelcomeCredits } from "./config";
@@ -28,6 +29,8 @@ function throwBillingError(message: string): never {
   throw new BillingDomainError("billing_unavailable", "Billing backend is unavailable.");
 }
 export async function initializeCreditAccount(userId: string) { await rpc("billing_ensure_account", { p_user_id: userId }); const welcome = getWelcomeCredits(); if (welcome > 0) await rpc("billing_grant_credits", { p_user_id: userId, p_credits: welcome, p_kind: "welcome", p_source_key: `welcome:${userId}`, p_metadata: {} }); return getCreditBalance(userId); }
+export async function grantGuestPromoCredits(userId: string) { const data = jsonObject(await rpc("billing_grant_credits", { p_user_id: userId, p_credits: GUEST_PROMO_CREDITS, p_kind: "promo_guest", p_source_key: `promo:guest:${userId}`, p_metadata: { program: "guest_first_clean" } })); return { balance: balanceFrom(data), granted: Boolean(data.granted) }; }
+export async function claimSignupPromoCredits(userId: string, emailFingerprint: string) { const data = jsonObject(await rpc("billing_claim_signup_promo", { p_user_id: userId, p_email_fingerprint: emailFingerprint, p_credits: SIGNUP_PROMO_CREDITS })); return { balance: balanceFrom(data), granted: Boolean(data.granted) }; }
 export async function getCreditBalance(userId: string) { return balanceFrom(jsonObject(await rpc("billing_get_balance", { p_user_id: userId }))); }
 export async function reserveCredits(userId: string, operationKey: string, credits: number): Promise<CreditReservation> { const limits = getBillingLimits(); const data = jsonObject(await rpc("billing_reserve_credits", { p_user_id: userId, p_operation_key: operationKey, p_credits: credits, p_requests_per_minute: limits.requestsPerMinute, p_credits_per_24h: limits.creditsPer24h, p_ttl_minutes: limits.reservationTtlMinutes })); return { reservationId: String(data.reservation_id), status: String(data.status) as CreditReservation["status"], credits: numeric(data.credits), created: Boolean(data.created), balance: balanceFrom(data) }; }
 export async function commitReservation(userId: string, reservationId: string) { return balanceFrom(jsonObject(await rpc("billing_commit_reservation", { p_user_id: userId, p_reservation_id: reservationId }))); }
