@@ -20,6 +20,7 @@ const PATTERNS: Array<{ kind: ProtectedKind; regex: RegExp }> = [
 const MULTI_ENTITY = /\b(?:[A-Z][\p{Ll}\p{M}'’.-]{1,}|[A-Z]{2,})(?:\s+(?:(?:of|the|and|&|for)\s+)?(?:[A-Z][\p{Ll}\p{M}'’.-]{1,}|[A-Z]{2,})){1,4}\b/gu;
 const CAMEL_ENTITY = /\b[A-Z][\p{Ll}\p{M}]{1,}[A-Z][\p{L}\p{M}\p{N}]*\b/gu;
 const ACRONYM_ENTITY = /\b[A-Z]{2,10}\b/g;
+const STRUCTURAL_LEADERS = new Set(["On", "In", "At", "From", "To", "For", "By", "With", "As", "This", "That", "These", "Those", "We", "I"]);
 
 function matches(regex: RegExp, text: string, kind: ProtectedKind): Candidate[] {
   regex.lastIndex = 0;
@@ -31,13 +32,20 @@ function matches(regex: RegExp, text: string, kind: ProtectedKind): Candidate[] 
   return found;
 }
 
+function reliableMultiEntities(text: string) {
+  return matches(MULTI_ENTITY, text, "entity").filter(candidate => {
+    const tokens = candidate.value.split(/\s+/u);
+    // Avoid weak sentence-structure collisions such as "On August" stealing the
+    // higher-confidence date "August 31, 2026". Longer names such as
+    // "The New York Times" remain eligible because their evidence is stronger.
+    return !STRUCTURAL_LEADERS.has(tokens[0]) || tokens.length >= 3;
+  });
+}
+
 function candidatesFor(text: string): Candidate[] {
   const candidates: Candidate[] = [];
   for (const { kind, regex } of PATTERNS) candidates.push(...matches(regex, text, kind));
-  // Deterministic, bounded proper-name protection. Multi-token title-cased names cover
-  // people/organizations/places; mixed-case products and all-caps acronyms cover names
-  // such as OpenAI/C2PA-style references without an additional model call.
-  candidates.push(...matches(MULTI_ENTITY, text, "entity"));
+  candidates.push(...reliableMultiEntities(text));
   candidates.push(...matches(CAMEL_ENTITY, text, "entity"));
   candidates.push(...matches(ACRONYM_ENTITY, text, "entity"));
   return candidates;
@@ -55,37 +63,14 @@ function chooseNonOverlapping(candidates: Candidate[]) {
 
 export function prepareProtectedText(text: string): PreparedText {
   const selected = chooseNonOverlapping(candidatesFor(text));
-  const spans: ProtectedSpan[] = selected.map((item, id) => ({
-    ...item,
-    id,
-    token: `[[PROTECTED_${String(id).padStart(4, "0")}]]`,
-  }));
-
+  const spans: ProtectedSpan[] = selected.map((item, id) => ({ ...item, id, token: `[[PROTECTED_${String(id).padStart(4, "0")}]]` }));
   let cursor = 0;
   let protectedText = "";
-  for (const span of spans) {
-    protectedText += text.slice(cursor, span.start) + span.token;
-    cursor = span.end;
-  }
+  for (const span of spans) { protectedText += text.slice(cursor, span.start) + span.token; cursor = span.end; }
   protectedText += text.slice(cursor);
-
   return { original: text, protectedText, spans };
 }
 
-export function tokenOccurrenceCount(text: string, token: string) {
-  return text.split(token).length - 1;
-}
-
-export function restoreProtectedText(text: string, spans: ProtectedSpan[]) {
-  let restored = text;
-  for (const span of spans) restored = restored.split(span.token).join(span.value);
-  return restored;
-}
-
-export function extractInvariantValues(text: string) {
-  const prepared = prepareProtectedText(text);
-  return prepared.spans
-    .filter((span) => span.kind !== "quote" && span.kind !== "code" && span.kind !== "citation")
-    .map((span) => `${span.kind}:${span.value}`)
-    .sort();
-}
+export function tokenOccurrenceCount(text: string, token: string) { return text.split(token).length - 1; }
+export function restoreProtectedText(text: string, spans: ProtectedSpan[]) { let restored = text; for (const span of spans) restored = restored.split(span.token).join(span.value); return restored; }
+export function extractInvariantValues(text: string) { const prepared = prepareProtectedText(text); return prepared.spans.filter((span) => span.kind !== "quote" && span.kind !== "code" && span.kind !== "citation").map((span) => `${span.kind}:${span.value}`).sort(); }
