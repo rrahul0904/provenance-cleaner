@@ -1,21 +1,19 @@
 name: preview-live-smoke
 
 on:
-  issue_comment:
-    types: [created]
+  pull_request:
+    types: [labeled]
 
 permissions:
   contents: read
 
 jobs:
   controlled-preview:
-    if: github.event.issue.pull_request && github.event.issue.number == 11 && github.event.comment.body == '/runtime-smoke'
+    if: github.event.label.name == 'enhancement' && github.event.pull_request.number == 11 && github.event.pull_request.head.ref == 'controlled-launch-verification'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: controlled-launch-verification
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
