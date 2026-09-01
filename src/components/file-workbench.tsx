@@ -7,8 +7,9 @@ import { inspectFile, sanitizeFile } from "@/lib/files";
 import { sha256Hex } from "@/lib/files/hash";
 import { buildVerificationReceipt } from "@/lib/files/verification-receipt";
 import type { FileInspectionReceipt, FileSanitizeResult } from "@/lib/files";
+import { isAcceptedFileKind, MAX_FILE_BYTES, validateFileSize } from "@/lib/product-contract";
 
-const MAX_BYTES = 20 * 1024 * 1024;
+const ADVANCED_MAX_BYTES = 20 * 1024 * 1024;
 const ACCEPT = ".jpg,.jpeg,.png,.webp,.docx,.pdf,image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export function FileWorkbench() {
@@ -24,7 +25,11 @@ export function FileWorkbench() {
 
   async function bytesForSelected() {
     if (!file) throw new Error("Choose a file first.");
-    if (file.size > MAX_BYTES) throw new Error("Phase 2 limits local files to 20 MB.");
+    const parityKind = isAcceptedFileKind(file.name, file.type);
+    if (parityKind && parityKind !== "txt" && !validateFileSize(file.size)) {
+      throw new Error("DOCX, PNG and JPEG files are limited to 3.2 MB per cleaning job.");
+    }
+    if (!parityKind && file.size > ADVANCED_MAX_BYTES) throw new Error("Advanced inspection-only files are limited to 20 MB.");
     return new Uint8Array(await file.arrayBuffer());
   }
 
@@ -86,13 +91,7 @@ export function FileWorkbench() {
 
   function downloadReceipt() {
     if (!receipt || !originalHash) return;
-    const exportable = buildVerificationReceipt({
-      originalHash,
-      inspection: receipt,
-      c2pa,
-      cleaned,
-      cleanedHash,
-    });
+    const exportable = buildVerificationReceipt({ originalHash, inspection: receipt, c2pa, cleaned, cleanedHash });
     const name = `${baseName(receipt.file.name)}.verification.json`;
     downloadBlob(new Blob([JSON.stringify(exportable, null, 2)], { type: "application/json" }), name);
   }
@@ -100,37 +99,28 @@ export function FileWorkbench() {
   const sanitizeBlocked = !receipt || !receipt.capabilities.sanitize;
   const hasProvenance = Boolean(receipt?.summary.provenance);
   const canVerifyC2pa = Boolean(receipt && receipt.file.format !== "docx");
+  const selectedParityKind = file ? isAcceptedFileKind(file.name, file.type) : null;
 
   return (
     <section className="file-section" aria-label="File metadata scanner">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Phase 2 · verified provenance</p>
+          <p className="eyebrow">File metadata & provenance</p>
           <h2>Inspect, verify, then decide.</h2>
-          <p>Local metadata inspection is fast and deterministic. Content Credentials verification uses the official C2PA browser SDK only when you request it.</p>
+          <p>DOCX, PNG and JPEG follow the parity cleaning contract at a 3.2 MB maximum. Existing PDF/WebP support remains available as an advanced inspection path. Signed provenance is never silently destroyed.</p>
         </div>
-        <span className="pill">20 MB local limit</span>
+        <span className="pill">DOCX · PNG · JPEG ≤ {(MAX_FILE_BYTES / (1024 * 1024)).toFixed(1)} MB</span>
       </div>
 
       <div className="file-grid">
         <div className="panel file-drop-panel">
           <label className="drop-zone">
-            <input
-              type="file"
-              accept={ACCEPT}
-              onChange={(event) => {
-                const next = event.target.files?.[0] ?? null;
-                setFile(next);
-                setReceipt(null);
-                setOriginalHash(null);
-                setCleaned(null);
-                setCleanedHash(null);
-                setC2pa(null);
-                setError(null);
-              }}
-            />
+            <input type="file" accept={ACCEPT} onChange={(event) => {
+              const next = event.target.files?.[0] ?? null;
+              setFile(next); setReceipt(null); setOriginalHash(null); setCleaned(null); setCleanedHash(null); setC2pa(null); setError(null);
+            }} />
             <strong>{file ? file.name : "Choose a document or image"}</strong>
-            <span>{file ? `${formatBytes(file.size)} · ready for local inspection` : "JPEG · PNG · WebP · DOCX · PDF"}</span>
+            <span>{file ? `${formatBytes(file.size)} · ${selectedParityKind && selectedParityKind !== "txt" ? "1-credit parity file job" : "advanced local inspection"}` : "JPEG · PNG · DOCX · plus PDF/WebP inspection"}</span>
           </label>
 
           <div className="actions">
@@ -140,110 +130,38 @@ export function FileWorkbench() {
             {cleaned && <button className="ghost" onClick={downloadCleaned}>Download cleaned copy</button>}
             {receipt && originalHash && <button className="ghost" onClick={downloadReceipt}>Export JSON receipt</button>}
           </div>
-          <p className="privacy-note">Inspect first. Provenance-bearing assets are never modified by default because byte changes can invalidate signed hard bindings.</p>
+          <p className="privacy-note">Files are processed in-browser. Provenance-bearing assets are never modified by default because byte changes can invalidate signed hard bindings.</p>
           {error && <div className="error-card">{error}</div>}
         </div>
 
         <div className="panel file-receipt-panel">
           <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Verification receipt</p>
-              <h2>{receipt ? `${receipt.summary.total} metadata finding${receipt.summary.total === 1 ? "" : "s"}` : "Ready to inspect"}</h2>
-            </div>
+            <div><p className="eyebrow">Verification receipt</p><h2>{receipt ? `${receipt.summary.total} metadata finding${receipt.summary.total === 1 ? "" : "s"}` : "Ready to inspect"}</h2></div>
             {receipt && <span className={`score ${receipt.summary.provenance ? "warn" : "ok"}`}>{receipt.summary.provenance ? "Provenance" : "Inspected"}</span>}
           </div>
 
-          {!receipt ? (
-            <div className="empty-state compact">Choose a supported file to see metadata categories, hashes, removal policy and optional Content Credentials verification.</div>
-          ) : (
-            <>
-              <div className="metrics">
-                <Metric label="Privacy metadata" value={receipt.summary.privacyMetadata} />
-                <Metric label="Provenance" value={receipt.summary.provenance} />
-                <Metric label="Safe removals" value={receipt.summary.removableByDefault} />
-              </div>
-              <div className="file-meta-line"><span>{receipt.file.format.toUpperCase()}</span><span>{formatBytes(receipt.file.bytes)}</span><span>{receipt.capabilities.sanitize ? "sanitizable" : "inspection only"}</span></div>
-              {originalHash && <div className="file-meta-line"><span>SHA-256</span><span title={originalHash}>{shortHash(originalHash)}</span></div>}
-              <div className="findings file-findings">
-                {receipt.findings.length === 0 ? (
-                  <div className="success-card">No tracked metadata was found.</div>
-                ) : receipt.findings.map((item) => (
-                  <article className="finding" key={item.id}>
-                    <div>
-                      <strong>{item.label}</strong>
-                      <p>{item.description}</p>
-                    </div>
-                    <span className={item.removableByDefault ? "tag-safe" : "tag-review"}>{item.removableByDefault ? "remove" : "preserve"}</span>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
+          {!receipt ? <div className="empty-state compact">Choose a supported file to see metadata categories, hashes, removal policy and optional Content Credentials verification.</div> : <>
+            <div className="metrics"><Metric label="Privacy metadata" value={receipt.summary.privacyMetadata} /><Metric label="Provenance" value={receipt.summary.provenance} /><Metric label="Safe removals" value={receipt.summary.removableByDefault} /></div>
+            <div className="file-meta-line"><span>{receipt.file.format.toUpperCase()}</span><span>{formatBytes(receipt.file.bytes)}</span><span>{receipt.capabilities.sanitize ? "sanitizable" : "inspection only"}</span></div>
+            {originalHash && <div className="file-meta-line"><span>Original SHA-256</span><span title={originalHash}>{shortHash(originalHash)}</span></div>}
+            <div className="findings file-findings">{receipt.findings.length === 0 ? <div className="success-card">No tracked metadata was found.</div> : receipt.findings.map((item) => <article className="finding" key={item.id}><div><strong>{item.label}</strong><p>{item.description}</p></div><span className={item.removableByDefault ? "tag-safe" : "tag-review"}>{item.removableByDefault ? "remove" : "preserve"}</span></article>)}</div>
+          </>}
 
-          {c2pa && (
-            <div className={c2pa.status === "valid" || c2pa.status === "not_present" ? "verification-box" : "notice-card"}>
-              <strong>Content Credentials · {formatC2paStatus(c2pa.status)}</strong>
-              <div className="verification-stats">
-                <span>{c2pa.manifestCount} manifest{c2pa.manifestCount === 1 ? "" : "s"}</span>
-                <span>{c2pa.validation.length} validation status{c2pa.validation.length === 1 ? "" : "es"}</span>
-              </div>
-              <p>{c2pa.note}</p>
-              {c2pa.validation.slice(0, 4).map((item) => <p key={`${item.code}-${item.url ?? ""}`}><strong>{item.code}</strong>{item.explanation ? ` · ${item.explanation}` : ""}</p>)}
-            </div>
-          )}
+          {c2pa && <div className={c2pa.status === "valid" || c2pa.status === "not_present" ? "verification-box" : "notice-card"}><strong>Content Credentials · {formatC2paStatus(c2pa.status)}</strong><div className="verification-stats"><span>{c2pa.manifestCount} manifest{c2pa.manifestCount === 1 ? "" : "s"}</span><span>{c2pa.validation.length} validation status{c2pa.validation.length === 1 ? "" : "es"}</span></div><p>{c2pa.note}</p>{c2pa.validation.slice(0, 4).map((item) => <p key={`${item.code}-${item.url ?? ""}`}><strong>{item.code}</strong>{item.explanation ? ` · ${item.explanation}` : ""}</p>)}</div>}
 
-          {cleaned && (
-            <div className="verification-box">
-              <strong>Post-clean verification</strong>
-              <div className="verification-stats">
-                <span>{cleaned.removed.length} removed</span>
-                <span>{cleaned.after.summary.removableByDefault} removable findings remain</span>
-                {cleanedHash && <span title={cleanedHash}>SHA {shortHash(cleanedHash)}</span>}
-              </div>
-              <p>The cleaned bytes were re-scanned and re-hashed before the download became available.</p>
-            </div>
-          )}
+          {cleaned && <div className="verification-box"><strong>Post-clean verification</strong><div className="verification-stats"><span>{cleaned.removed.length} removed</span><span>{cleaned.after.summary.removableByDefault} removable findings remain</span>{cleanedHash && <span title={cleanedHash}>Output SHA {shortHash(cleanedHash)}</span>}</div><p>The cleaned bytes were re-scanned and re-hashed. A changed output hash is expected when metadata is removed; content/pixel integrity is verified separately where supported.</p></div>}
 
-          {hasProvenance && (
-            <div className="notice-card">A provenance candidate is present. Even if its metadata chunk is copied forward, changing other bytes can break the signed hard binding. Sanitization remains blocked.</div>
-          )}
-          {receipt?.file.format === "pdf" && (
-            <div className="notice-card">PDF remains inspection-only. Rewriting arbitrary PDFs safely requires a structure-aware writer that preserves cross-reference tables, signatures, forms and attachments.</div>
-          )}
+          {hasProvenance && <div className="notice-card">A provenance candidate is present. Changing other bytes can break a signed hard binding, so sanitization remains blocked until the integrity consequence is explicit.</div>}
+          {receipt?.file.format === "pdf" && <div className="notice-card">PDF remains inspection-only. Rewriting arbitrary PDFs safely requires a structure-aware writer that preserves cross-reference tables, signatures, forms and attachments.</div>}
         </div>
       </div>
     </section>
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
-  return <div className="metric"><span>{label}</span><strong>{value}</strong></div>;
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function shortHash(hash: string) {
-  return `${hash.slice(0, 12)}…${hash.slice(-8)}`;
-}
-
-function baseName(name: string) {
-  const index = name.lastIndexOf(".");
-  return index > 0 ? name.slice(0, index) : name;
-}
-
-function formatC2paStatus(status: C2paVerificationReceipt["status"]) {
-  return status.replaceAll("_", " ");
-}
-
-function downloadBlob(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
+function Metric({ label, value }: { label: string; value: number }) { return <div className="metric"><span>{label}</span><strong>{value}</strong></div>; }
+function formatBytes(bytes: number) { if (bytes < 1024) return `${bytes} B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`; return `${(bytes / (1024 * 1024)).toFixed(1)} MB`; }
+function shortHash(hash: string) { return `${hash.slice(0, 12)}…${hash.slice(-8)}`; }
+function baseName(name: string) { const index = name.lastIndexOf("."); return index > 0 ? name.slice(0, index) : name; }
+function formatC2paStatus(status: C2paVerificationReceipt["status"]) { return status.replaceAll("_", " "); }
+function downloadBlob(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 0); }

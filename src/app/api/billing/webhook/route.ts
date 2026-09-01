@@ -7,6 +7,7 @@ import { logEvent } from "@/lib/server/observability";
 export const runtime = "nodejs";
 const MAX_WEBHOOK_BYTES = 1_048_576;
 function purchaseId(session: Stripe.Checkout.Session) { return session.metadata?.purchase_id || session.client_reference_id || null; }
+function checkoutCountry(session: Stripe.Checkout.Session) { return session.shipping_details?.address?.country ?? session.customer_details?.address?.country ?? null; }
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/billing/webhook");
@@ -28,9 +29,14 @@ export async function POST(request: Request) {
     if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
       const session = event.data.object as Stripe.Checkout.Session;
       const id = purchaseId(session);
+      const country = checkoutCountry(session);
       if (id && session.payment_status === "paid") {
+        if (country !== "US") {
+          logEvent("checkout_country_rejected", { requestId: context.requestId, stripeEventId: event.id, purchaseId: id, country: country ?? "unknown" });
+          return apiOk(context, { received: true, credited: false, reason: "country_not_supported" });
+        }
         const result = await completeCheckoutPurchase(event.id, event.type, id, session.id) as Record<string, unknown>;
-        logEvent("checkout_completed", { requestId: context.requestId, stripeEventId: event.id, purchaseId: id, duplicate: result?.duplicate === true });
+        logEvent("checkout_completed", { requestId: context.requestId, stripeEventId: event.id, purchaseId: id, duplicate: result?.duplicate === true, country: "US" });
       }
     } else if (event.type === "checkout.session.expired") {
       const session = event.data.object as Stripe.Checkout.Session;
