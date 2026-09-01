@@ -2,6 +2,7 @@ import { expect, test, type Frame, type Page } from "@playwright/test";
 
 const FIXTURE = `On August 31, 2026, Jane emailed team@example.com and said, "Ship the report by Friday." The reference is https://example.com/report and the total is 42 units.`;
 const RELEASE_MARKER = "[[PROVENANCE_PREVIEW_RELEASE_SMOKE]] This controlled Preview request must release its reserved credit after the injected model failure.";
+const PREVIEW_AUTH_BLOCKER = "BLOCKED — Vercel Preview Authentication still intercepts the controlled-launch Preview.";
 
 type Balance = { settled: number; held: number; available: number };
 
@@ -61,9 +62,23 @@ async function balance(page: Page): Promise<Balance> {
   return payload.balance as Balance;
 }
 
+async function assertPreviewIsReachable(page: Page) {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  const appHeading = page.getByRole("heading", { name: /See what your content is carrying/i });
+  const vercelLogin = page.getByRole("heading", { name: /Log in to Vercel/i });
+
+  const landing = await Promise.race([
+    appHeading.waitFor({ state: "visible", timeout: 10_000 }).then(() => "app" as const).catch(() => null),
+    vercelLogin.waitFor({ state: "visible", timeout: 10_000 }).then(() => "vercel" as const).catch(() => null),
+  ]);
+
+  if (landing === "vercel") throw new Error(PREVIEW_AUTH_BLOCKER);
+  await expect(appHeading).toBeVisible({ timeout: 30_000 });
+}
+
 test("real Preview: guest → Stripe TEST Checkout → AI commit → release → duplicate operation", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: /See what your content is carrying/i })).toBeVisible();
+  await assertPreviewIsReachable(page);
 
   const account = page.getByRole("region", { name: "Account and credits" });
   const startGuest = account.getByRole("button", { name: "Start guest" });
