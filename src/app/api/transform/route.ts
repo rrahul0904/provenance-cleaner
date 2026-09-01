@@ -5,6 +5,7 @@ import { getRequestIdentity } from "@/lib/auth/identity";
 import { creditCostForText } from "@/lib/billing/catalog";
 import { commitReservation, releaseReservation, reserveCredits } from "@/lib/billing/server";
 import { BillingDomainError } from "@/lib/billing/types";
+import { countWords, MAX_REWRITE_WORDS, validateRewriteWordCount } from "@/lib/product-contract";
 import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
 import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
@@ -15,7 +16,7 @@ export const runtime = "nodejs";
 const DEFAULT_MODEL = "mistral/mistral-medium-3.5";
 const MAX_ATTEMPTS = 2;
 const PREVIEW_RELEASE_SMOKE_MARKER = "[[PROVENANCE_PREVIEW_RELEASE_SMOKE]]";
-const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().min(20).max(12_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
+const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().min(20).max(250_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
 
 async function generateAttempt(protectedText: string, mode: TransformMode, model: string, retryFeedback?: string) {
   const outputs: string[] = [];
@@ -46,8 +47,11 @@ export async function POST(request: Request) {
   }
 
   let parsed: z.infer<typeof bodySchema>;
-  try { parsed = await parseJson(request, bodySchema, 32_768); }
+  try { parsed = await parseJson(request, bodySchema, 300_000); }
   catch (error) { return error instanceof ApiRequestError ? apiError(context, error.code, error.message, error.status) : apiError(context, "invalid_request", "Request is invalid.", 400); }
+
+  const rewriteLimit = validateRewriteWordCount(parsed.text);
+  if (!rewriteLimit.ok) return apiError(context, "rewrite_too_large", `Semantic editing accepts at most ${MAX_REWRITE_WORDS.toLocaleString("en-US")} words per operation. Split larger documents into parts.`, 413);
 
   const challenge = await verifyTurnstile(parsed.challengeToken, "transform");
   if (!challenge.ok) {
@@ -56,7 +60,7 @@ export async function POST(request: Request) {
   }
 
   const cost = creditCostForText(parsed.text);
-  const sourceWords = parsed.text.trim().split(/\s+/u).filter(Boolean).length;
+  const sourceWords = countWords(parsed.text);
   logEvent("transform_request", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, sourceChars: parsed.text.length, sourceWords, credits: cost });
   let reservationId: string;
   try {
