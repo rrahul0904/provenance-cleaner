@@ -1,0 +1,3 @@
+import { describe, expect, it } from "vitest";
+import { CREDIT_PACKS, creditCostForText } from "../src/lib/billing/catalog";
+describe("billing catalog",()=>{it("meters one credit per 1000 source words",()=>{expect(creditCostForText("hello world")).toBe(1);expect(creditCostForText(Array.from({length:1000},()=>"word").join(" "))).toBe(1);expect(creditCostForText(Array.from({length:1001},()=>"word").join(" "))).toBe(2);});it("keeps pack quantities server-independent",()=>{expect(CREDIT_PACKS.starter.credits).toBe(10);expect(CREDIT_PACKS.plus.credits).toBe(25);expect(CREDIT_PACKS.pro.credits).toBe(100);});});
