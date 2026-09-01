@@ -1,5 +1,6 @@
 -- Phase 5 additive hardening. Apply only after phase_4_accounts_credits.sql to a dedicated provenance-cleaner project.
 create index if not exists credit_reservations_expiry_idx on billing.credit_reservations(status, expires_at) where status='reserved';
+create index if not exists checkout_purchases_user_idx on billing.checkout_purchases(user_id);
 
 create or replace function public.billing_expire_stale_reservations(p_limit int default 200)
 returns jsonb language plpgsql security definer set search_path = '' as $$

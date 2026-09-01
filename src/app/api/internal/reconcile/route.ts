@@ -16,8 +16,9 @@ export async function GET(request: Request) {
   if (!authorized(request)) return apiError(context, "unauthorized", "Not authorized.", 401);
   try {
     const result = await expireStaleReservations(200);
-    logEvent("reservation_reconciliation", { requestId: context.requestId, expired: Number(result.expired ?? 0), latencyMs: Date.now() - context.startedAt });
-    return apiOk(context, { reconciled: true, expired: Number(result.expired ?? 0) });
+    const expired = result !== null && typeof result === "object" && !Array.isArray(result) ? Number(result.expired ?? 0) : 0;
+    logEvent("reservation_reconciliation", { requestId: context.requestId, expired, latencyMs: Date.now() - context.startedAt });
+    return apiOk(context, { reconciled: true, expired });
   } catch {
     logEvent("reservation_reconciliation_failed", { requestId: context.requestId });
     return apiError(context, "reconciliation_failed", "Reservation reconciliation failed.", 503);

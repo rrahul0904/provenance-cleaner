@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getTurnstileSiteKey } from "@/lib/public-config";
 
 type TurnstileApi = {
   render: (element: HTMLElement, options: { sitekey: string; action: string; callback: (token: string) => void; "expired-callback": () => void; "error-callback": () => void; }) => string;
@@ -11,7 +12,7 @@ type TurnstileApi = {
 function api() { return (window as unknown as { turnstile?: TurnstileApi }).turnstile; }
 
 export function TurnstileWidget({ action, onToken, resetKey = 0 }: { action: string; onToken: (token: string | null) => void; resetKey?: number; }) {
-  const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const sitekey = getTurnstileSiteKey();
   const testBypass = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_TURNSTILE_TEST_BYPASS === "1";
   const elementRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<string | null>(null);

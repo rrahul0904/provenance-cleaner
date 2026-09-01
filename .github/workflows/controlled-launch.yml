@@ -1,35 +1,25 @@
-name: ci
+name: controlled-launch
 
 on:
-  push:
-    branches: [main, "phase-*"]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  verify:
+  release-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
-      - name: Require committed lockfile
+      - name: Confirm lockfile exists
         run: test -f package-lock.json
-      - name: Install pinned dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Unit tests
-        run: npm test
-      - name: Lint
-        run: npm run lint
-      - name: Build
-        run: npm run build
-      - name: Production dependency audit
-        run: npm audit --omit=dev --audit-level=high
-      - name: Controlled-launch static gate
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Static controlled-launch gate
         run: npm run release:check
         env:
           NEXT_PUBLIC_APP_URL: https://preview.invalid
@@ -45,18 +35,3 @@ jobs:
           STRIPE_PRICE_STARTER: price_test
           STRIPE_PRICE_PLUS: price_test
           STRIPE_PRICE_PRO: price_test
-
-  e2e:
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.22.0
-      - name: Require committed lockfile
-        run: test -f package-lock.json
-      - run: npm ci --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e

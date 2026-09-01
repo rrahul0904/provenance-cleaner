@@ -1,0 +1,36 @@
+name: preview-live-smoke
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  controlled-preview:
+    if: github.event.label.name == 'enhancement' && github.event.pull_request.number == 11 && github.event.pull_request.head.ref == 'controlled-launch-verification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Real controlled-launch Preview smoke
+        env:
+          PREVIEW_URL: https://provenance-cleaner-git-control-32678d-rrahul0904-5013s-projects.vercel.app
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npx playwright test --config=playwright.preview.config.ts
+      - name: Preserve Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-live-playwright-report
+          path: playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

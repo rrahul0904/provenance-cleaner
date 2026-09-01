@@ -1,10 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getPublicSupabaseConfig } from "@/lib/public-config";
 
 export async function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !publishableKey) throw new Error("Supabase server session configuration is missing.");
+  const { url, publishableKey } = getPublicSupabaseConfig();
   const cookieStore = await cookies();
   return createServerClient(url, publishableKey, {
     cookies: {

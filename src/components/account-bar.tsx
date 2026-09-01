@@ -14,8 +14,26 @@ export function AccountBar() {
   const supabase = useMemo(() => { try { return createClient(); } catch { return null; } }, []);
   const [identity, setIdentity] = useState<IdentityState | null>(null); const [balance, setBalance] = useState<BalanceState | null>(null); const [busy, setBusy] = useState(false); const [message, setMessage] = useState<string | null>(null); const [challengeToken, setChallengeToken] = useState<string | null>(null); const [challengeReset, setChallengeReset] = useState(0);
   const onChallenge = useCallback((token: string | null) => setChallengeToken(token), []);
-  const refresh = useCallback(async () => { if (!supabase) return; const { data } = await supabase.auth.getClaims(); const claims = data?.claims as Record<string, unknown> | undefined; if (!claims || typeof claims.sub !== "string") { setIdentity(null); setBalance(null); return; } setIdentity({ userId: claims.sub, isAnonymous: claims.is_anonymous === true || claims.is_anonymous === "true" }); const response = await fetch("/api/billing/balance", { cache: "no-store" }); if (response.ok) { const payload = await response.json(); setBalance(payload.balance); } }, [supabase]);
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    void supabase.auth.getClaims().then(async ({ data }) => {
+      if (cancelled) return;
+      const claims = data?.claims as Record<string, unknown> | undefined;
+      if (!claims || typeof claims.sub !== "string") {
+        setIdentity(null);
+        setBalance(null);
+        return;
+      }
+      setIdentity({ userId: claims.sub, isAnonymous: claims.is_anonymous === true || claims.is_anonymous === "true" });
+      const response = await fetch("/api/billing/balance", { cache: "no-store" });
+      if (!cancelled && response.ok) {
+        const payload = await response.json();
+        setBalance(payload.balance);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [supabase]);
   function resetChallenge() { setChallengeToken(null); setChallengeReset(value => value + 1); }
   async function startGuest() { if (!challengeToken) return; setBusy(true); setMessage(null); try { const response = await fetch("/api/auth/anonymous", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ challengeToken }) }); const payload = await response.json(); if (!response.ok) throw new Error(messageFrom(payload, "Could not start a guest session.")); setIdentity({ userId: payload.userId, isAnonymous: payload.isAnonymous !== false }); setBalance(payload.balance); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not start a guest session."); } finally { setBusy(false); resetChallenge(); } }
   async function google() { if (!supabase) return; setBusy(true); setMessage(null); const redirectTo = `${window.location.origin}/auth/callback?next=/`; const result = identity?.isAnonymous ? await supabase.auth.linkIdentity({ provider: "google", options: { redirectTo } }) : await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } }); if (result.error) { setMessage("Google sign-in could not be started."); setBusy(false); } }

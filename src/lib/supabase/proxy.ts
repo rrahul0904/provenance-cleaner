@@ -1,11 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getPublicSupabaseConfig } from "@/lib/public-config";
 
 export async function updateSession(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !publishableKey) return NextResponse.next({ request });
-
+  const { url, publishableKey } = getPublicSupabaseConfig();
   let response = NextResponse.next({ request });
   const supabase = createServerClient(url, publishableKey, {
     cookies: {
