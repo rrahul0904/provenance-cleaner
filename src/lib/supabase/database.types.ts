@@ -40,6 +40,7 @@ export type Database = {
         Returns: Json;
       };
       billing_expire_stale_reservations: { Args: { p_limit?: number }; Returns: Json };
+      billing_get_account_history: { Args: { p_limit?: number; p_user_id: string }; Returns: Json };
       billing_get_balance: { Args: { p_user_id: string }; Returns: Json };
       billing_grant_credits: {
         Args: { p_credits: number; p_kind: string; p_metadata?: Json; p_source_key: string; p_user_id: string };
