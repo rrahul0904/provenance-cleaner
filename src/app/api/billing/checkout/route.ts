@@ -1,21 +1,55 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
+import { verifyTurnstile } from "@/lib/abuse/turnstile";
 import { getRequestIdentity } from "@/lib/auth/identity";
 import { CREDIT_PACKS } from "@/lib/billing/catalog";
 import { getServerCreditPack } from "@/lib/billing/config";
 import { attachCheckoutSession, createPendingPurchase } from "@/lib/billing/server";
 import { getStripe } from "@/lib/billing/stripe";
+import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
+import { publicAppOrigin } from "@/lib/server/env";
+import { logEvent, requestSubjectKey } from "@/lib/server/observability";
+import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
+
 export const runtime = "nodejs";
-const schema = z.object({ packId: z.enum(["starter", "plus", "pro"]) });
+const schema = z.object({ packId: z.enum(["starter", "plus", "pro"]), challengeToken: z.string().max(2048).optional() });
+
 export async function POST(request: Request) {
-  const identity = await getRequestIdentity(); if (!identity) return NextResponse.json({ error: "Start a guest session or sign in before buying credits." }, { status: 401 });
-  let parsed: z.infer<typeof schema>; try { parsed = schema.parse(await request.json()); } catch { return NextResponse.json({ error: "Unknown credit pack." }, { status: 400 }); }
+  const context = requestContext(request, "/api/billing/checkout");
   try {
-    const pack = getServerCreditPack(parsed.packId); const purchaseId = crypto.randomUUID();
+    const identity = await getRequestIdentity();
+    if (!identity) return apiError(context, "auth_required", "Start a guest session or sign in before buying credits.", 401);
+    const subject = requestSubjectKey(request, identity.userId);
+    const limit = consumeRateLimit("checkout", subject, configuredLimit("RATE_LIMIT_CHECKOUT_PER_MINUTE", 4), 60_000);
+    if (!limit.allowed) {
+      logEvent("rate_limit_triggered", { requestId: context.requestId, route: context.route, userIdHash: subject });
+      return apiError(context, "rate_limited", "Too many checkout requests. Try again shortly.", 429, retryAfter(limit.retryAfterSeconds));
+    }
+    const parsed = await parseJson(request, schema, 4_096);
+    const challenge = await verifyTurnstile(parsed.challengeToken, "account");
+    if (!challenge.ok) {
+      logEvent("bot_challenge_failed", { requestId: context.requestId, route: context.route, userIdHash: subject, reason: challenge.reason ?? "unknown" });
+      return apiError(context, challenge.reason === "not_configured" ? "bot_protection_unavailable" : "bot_challenge_failed", challenge.reason === "not_configured" ? "Bot protection is not configured." : "Bot verification is required.", challenge.reason === "not_configured" ? 503 : 403);
+    }
+    const pack = getServerCreditPack(parsed.packId);
+    const purchaseId = crypto.randomUUID();
     await createPendingPurchase({ purchaseId, userId: identity.userId, packId: pack.id, credits: pack.credits, priceId: pack.priceId });
-    const origin = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin; const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({ mode: "payment", line_items: [{ price: pack.priceId, quantity: 1 }], client_reference_id: purchaseId, metadata: { purchase_id: purchaseId, user_id: identity.userId, pack_id: pack.id, credits: String(pack.credits) }, success_url: `${origin}/?checkout=success`, cancel_url: `${origin}/?checkout=cancelled` }, { idempotencyKey: `credit-purchase:${purchaseId}` });
-    if (!session.url) throw new Error("Stripe did not return a Checkout URL."); await attachCheckoutSession(purchaseId, identity.userId, session.id);
-    return NextResponse.json({ url: session.url, pack: CREDIT_PACKS[parsed.packId] });
-  } catch (error) { return NextResponse.json({ error: "Checkout is not configured yet.", technical: process.env.NODE_ENV === "development" && error instanceof Error ? error.message : undefined }, { status: 503 }); }
+    const origin = publicAppOrigin(request);
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [{ price: pack.priceId, quantity: 1 }],
+      client_reference_id: purchaseId,
+      metadata: { purchase_id: purchaseId, pack_id: pack.id },
+      success_url: `${origin}/?checkout=success`,
+      cancel_url: `${origin}/?checkout=cancelled`,
+    }, { idempotencyKey: `credit-purchase:${purchaseId}` });
+    if (!session.url) throw new Error("missing_checkout_url");
+    await attachCheckoutSession(purchaseId, identity.userId, session.id);
+    logEvent("checkout_created", { requestId: context.requestId, userIdHash: subject, purchaseId, packId: pack.id, credits: pack.credits, latencyMs: Date.now() - context.startedAt });
+    return apiOk(context, { url: session.url, pack: CREDIT_PACKS[parsed.packId] });
+  } catch (error) {
+    if (error instanceof ApiRequestError) return apiError(context, error.code, error.message, error.status);
+    logEvent("checkout_failed", { requestId: context.requestId, route: context.route, status: "backend_error" });
+    return apiError(context, "checkout_unavailable", "Checkout is not available.", 503);
+  }
 }

@@ -1,36 +1,99 @@
 import { generateText } from "ai";
-import { NextResponse } from "next/server";
 import { z } from "zod";
+import { verifyTurnstile } from "@/lib/abuse/turnstile";
 import { getRequestIdentity } from "@/lib/auth/identity";
 import { creditCostForText } from "@/lib/billing/catalog";
 import { commitReservation, releaseReservation, reserveCredits } from "@/lib/billing/server";
 import { BillingDomainError } from "@/lib/billing/types";
+import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
+import { logEvent, requestSubjectKey } from "@/lib/server/observability";
+import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
 import { chunkProtectedText, prepareProtectedText, TRANSFORM_MODES, TRANSFORM_SYSTEM, transformPrompt, validateTransformedDraft } from "@/lib/transform";
 import type { TransformMode, TransformResult } from "@/lib/transform";
+
 export const runtime = "nodejs";
-const DEFAULT_MODEL = "mistral/mistral-medium-3.5"; const MAX_ATTEMPTS = 2;
-const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().min(20).max(12_000), mode: z.enum(TRANSFORM_MODES) });
+const DEFAULT_MODEL = "mistral/mistral-medium-3.5";
+const MAX_ATTEMPTS = 2;
+const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().min(20).max(12_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
+
 async function generateAttempt(protectedText: string, mode: TransformMode, model: string, retryFeedback?: string) {
-  const outputs: string[] = []; for (const chunk of chunkProtectedText(protectedText)) { const { text } = await generateText({ model, system: TRANSFORM_SYSTEM, prompt: transformPrompt(chunk, mode, retryFeedback), temperature: 0.3 }); outputs.push(text.trim()); } return outputs.join("\n\n");
+  const outputs: string[] = [];
+  for (const chunk of chunkProtectedText(protectedText)) {
+    const { text } = await generateText({ model, system: TRANSFORM_SYSTEM, prompt: transformPrompt(chunk, mode, retryFeedback), temperature: 0.3 });
+    outputs.push(text.trim());
+  }
+  return outputs.join("\n\n");
 }
-function billingErrorResponse(error: BillingDomainError) {
-  if (error.code === "insufficient_credits") return NextResponse.json({ error: error.message, code: error.code }, { status: 402 });
-  if (error.code === "rate_limited" || error.code === "daily_credit_limit") return NextResponse.json({ error: error.message, code: error.code }, { status: 429 });
-  if (error.code === "operation_conflict") return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
-  return NextResponse.json({ error: "Billing is not available yet." }, { status: 503 });
+
+function billingError(context: ReturnType<typeof requestContext>, error: BillingDomainError) {
+  if (error.code === "insufficient_credits") return apiError(context, error.code, "Not enough credits are available for this edit.", 402);
+  if (error.code === "rate_limited" || error.code === "daily_credit_limit") return apiError(context, error.code, error.code === "rate_limited" ? "Too many editing requests were started recently." : "The daily editing-credit safety limit has been reached.", 429, retryAfter(60));
+  if (error.code === "operation_conflict") return apiError(context, error.code, "This edit operation has already been used.", 409);
+  return apiError(context, "billing_unavailable", "Billing is not available.", 503);
 }
+
 export async function POST(request: Request) {
-  const identity = await getRequestIdentity(); if (!identity) return NextResponse.json({ error: "Start a guest session or sign in before running a semantic edit.", code: "auth_required" }, { status: 401 });
-  let parsed: z.infer<typeof bodySchema>; try { parsed = bodySchema.parse(await request.json()); } catch (error) { return NextResponse.json({ error: "Invalid request. Provide an operation id, 20–12,000 characters, and a supported edit mode.", details: error instanceof z.ZodError ? error.issues : undefined }, { status: 400 }); }
-  const cost = creditCostForText(parsed.text); let reservationId: string;
-  try { const reservation = await reserveCredits(identity.userId, `transform:${parsed.operationId}`, cost); reservationId = reservation.reservationId; if (!reservation.created || reservation.status !== "reserved") return NextResponse.json({ error: "This edit operation is already in progress or has already completed. Start a new edit to continue.", code: "operation_conflict" }, { status: 409 }); }
-  catch (error) { if (error instanceof BillingDomainError) return billingErrorResponse(error); return NextResponse.json({ error: "Billing is not available yet." }, { status: 503 }); }
-  const prepared = prepareProtectedText(parsed.text); const model = process.env.TRANSFORM_MODEL ?? DEFAULT_MODEL; let retryFeedback: string | undefined; let lastErrors: string[] = [];
+  const context = requestContext(request, "/api/transform");
+  let identity: Awaited<ReturnType<typeof getRequestIdentity>>;
+  try { identity = await getRequestIdentity(); } catch { return apiError(context, "account_unavailable", "Account service is not available.", 503); }
+  if (!identity) return apiError(context, "auth_required", "Start a guest session or sign in before running an edit.", 401);
+  const subject = requestSubjectKey(request, identity.userId);
+  const burst = consumeRateLimit("transform", subject, configuredLimit("RATE_LIMIT_TRANSFORM_PER_MINUTE", 8), 60_000);
+  if (!burst.allowed) {
+    logEvent("rate_limit_triggered", { requestId: context.requestId, route: context.route, userIdHash: subject });
+    return apiError(context, "rate_limited", "Too many edit requests. Try again shortly.", 429, retryAfter(burst.retryAfterSeconds));
+  }
+
+  let parsed: z.infer<typeof bodySchema>;
+  try { parsed = await parseJson(request, bodySchema, 32_768); }
+  catch (error) { return error instanceof ApiRequestError ? apiError(context, error.code, error.message, error.status) : apiError(context, "invalid_request", "Request is invalid.", 400); }
+
+  const challenge = await verifyTurnstile(parsed.challengeToken, "transform");
+  if (!challenge.ok) {
+    logEvent("bot_challenge_failed", { requestId: context.requestId, route: context.route, userIdHash: subject, reason: challenge.reason ?? "unknown" });
+    return apiError(context, challenge.reason === "not_configured" ? "bot_protection_unavailable" : "bot_challenge_failed", challenge.reason === "not_configured" ? "Bot protection is not configured." : "Bot verification is required.", challenge.reason === "not_configured" ? 503 : 403);
+  }
+
+  const cost = creditCostForText(parsed.text);
+  const sourceWords = parsed.text.trim().split(/\s+/u).filter(Boolean).length;
+  logEvent("transform_request", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, sourceChars: parsed.text.length, sourceWords, credits: cost });
+  let reservationId: string;
   try {
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) { const draft = await generateAttempt(prepared.protectedText, parsed.mode, model, retryFeedback); const validation = validateTransformedDraft(prepared, draft, parsed.mode); if (validation.ok && validation.restoredText) { const balance = await commitReservation(identity.userId, reservationId); const result: TransformResult = { version: "semantic-transform-v2", text: validation.restoredText, mode: parsed.mode, model, attempts: attempt, metrics: validation.metrics, warnings: validation.warnings, billing: { operationId: parsed.operationId, reservationId, creditsCharged: cost, balanceAfter: balance.available } }; return NextResponse.json(result); } lastErrors = validation.errors; retryFeedback = validation.errors.map((item) => `- ${item}`).join("\n"); }
-    await releaseReservation(identity.userId, reservationId, "validation_failed"); return NextResponse.json({ error: "The generated edit did not pass factual-preservation checks after retrying. The credit hold was released.", validationErrors: lastErrors }, { status: 422 });
+    const reservation = await reserveCredits(identity.userId, `transform:${parsed.operationId}`, cost);
+    reservationId = reservation.reservationId;
+    if (!reservation.created || reservation.status !== "reserved") return apiError(context, "operation_conflict", "This edit operation is already in progress or complete.", 409);
+    logEvent("credit_reservation", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, credits: cost });
   } catch (error) {
-    try { await releaseReservation(identity.userId, reservationId, "generation_failed"); } catch { /* expiry is final recovery */ }
-    const message = error instanceof Error ? error.message : "AI generation failed."; return NextResponse.json({ error: "The editing service is not available. The credit hold was released or will expire automatically.", technical: process.env.NODE_ENV === "development" ? message : undefined }, { status: 503 });
+    if (error instanceof BillingDomainError) {
+      logEvent(error.code === "insufficient_credits" ? "insufficient_credits" : "billing_reservation_rejected", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, status: error.code });
+      return billingError(context, error);
+    }
+    return apiError(context, "billing_unavailable", "Billing is not available.", 503);
+  }
+
+  const prepared = prepareProtectedText(parsed.text);
+  const model = process.env.TRANSFORM_MODEL ?? DEFAULT_MODEL;
+  let retryFeedback: string | undefined;
+  try {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const draft = await generateAttempt(prepared.protectedText, parsed.mode, model, retryFeedback);
+      const validation = validateTransformedDraft(prepared, draft, parsed.mode);
+      if (validation.ok && validation.restoredText) {
+        const balance = await commitReservation(identity.userId, reservationId);
+        logEvent("credit_commit", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, credits: cost });
+        logEvent("transform_success", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, model, attempts: attempt, latencyMs: Date.now() - context.startedAt });
+        const result: TransformResult = { version: "semantic-transform-v2", text: validation.restoredText, mode: parsed.mode, model, attempts: attempt, metrics: validation.metrics, warnings: validation.warnings, billing: { operationId: parsed.operationId, reservationId, creditsCharged: cost, balanceAfter: balance.available } };
+        return apiOk(context, result as unknown as Record<string, unknown>);
+      }
+      retryFeedback = validation.errors.map(item => `- ${item}`).join("\n");
+    }
+    await releaseReservation(identity.userId, reservationId, "validation_failed");
+    logEvent("transform_validation_failure", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, attempts: MAX_ATTEMPTS });
+    logEvent("reservation_release", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, status: "validation_failed" });
+    return apiError(context, "validation_failed", "The edit did not pass factual-preservation checks. The credit hold was released.", 422);
+  } catch {
+    try { await releaseReservation(identity.userId, reservationId, "generation_failed"); logEvent("reservation_release", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, status: "generation_failed" }); } catch { /* TTL expiry remains final recovery. */ }
+    logEvent("model_provider_error", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, model, latencyMs: Date.now() - context.startedAt });
+    return apiError(context, "model_unavailable", "The editing service is temporarily unavailable. The credit hold was released or will expire automatically.", 503);
   }
 }

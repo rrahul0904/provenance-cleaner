@@ -1,0 +1,21 @@
+# Security checklist
+
+- [x] RLS enabled on Phase 4 billing tables.
+- [x] Billing tables live in non-public `billing` schema.
+- [x] Elevated RPCs use fixed empty `search_path` and are revoked from public/anon/authenticated.
+- [x] No authorization uses user-editable `user_metadata`.
+- [x] Browser cannot grant credits, select Stripe prices, mutate ledger rows or complete purchases.
+- [x] Ledger update/delete blocked by trigger.
+- [x] Webhook signature verified over raw body before processing.
+- [x] Phase 5 blocks live Stripe server keys.
+- [x] Guest/edit/Checkout protected by server-side Turnstile verification.
+- [x] Production bypass for Turnstile is impossible through the documented flags.
+- [x] API payload size/content type/schema validation centralized.
+- [x] Request IDs returned without exposing stack traces/provider errors.
+- [x] Raw text/files/cookies/tokens/IPs excluded from application logs.
+- [x] CSP restricts framing/object sources and permits only required Turnstile/WASM behavior.
+- [ ] Apply SQL only after a dedicated provenance-cleaner Supabase project is identified.
+- [ ] Run Supabase security and performance advisors after application.
+- [ ] Generate and commit package-lock, then switch CI to npm ci.
+- [ ] Verify CI on an assigned GitHub hosted runner.
+- [ ] Verify Vercel preview and browser smoke tests after project import.

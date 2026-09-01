@@ -1,18 +1,48 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { z } from "zod";
 import { initializeCreditAccount } from "@/lib/billing/server";
+import { createClient } from "@/lib/supabase/server";
+import { verifyTurnstile } from "@/lib/abuse/turnstile";
+import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
+import { logEvent, requestSubjectKey } from "@/lib/server/observability";
+import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
-export async function POST() {
+const schema = z.object({ challengeToken: z.string().max(2048).optional() });
+
+export async function POST(request: Request) {
+  const context = requestContext(request, "/api/auth/anonymous");
+  const subject = requestSubjectKey(request);
+  const limit = consumeRateLimit("guest", subject, configuredLimit("RATE_LIMIT_GUEST_PER_MINUTE", 4), 60_000);
+  if (!limit.allowed) {
+    logEvent("rate_limit_triggered", { requestId: context.requestId, route: context.route, subjectHash: subject });
+    return apiError(context, "rate_limited", "Too many guest-session requests. Try again shortly.", 429, retryAfter(limit.retryAfterSeconds));
+  }
   try {
+    const parsed = await parseJson(request, schema, 4_096);
+    const challenge = await verifyTurnstile(parsed.challengeToken, "account");
+    if (!challenge.ok) {
+      logEvent("bot_challenge_failed", { requestId: context.requestId, route: context.route, reason: challenge.reason ?? "unknown" });
+      return apiError(context, challenge.reason === "not_configured" ? "bot_protection_unavailable" : "bot_challenge_failed", challenge.reason === "not_configured" ? "Bot protection is not configured." : "Bot verification is required.", challenge.reason === "not_configured" ? 503 : 403);
+    }
     const supabase = await createClient();
     const claims = await supabase.auth.getClaims();
     const existing = claims.data?.claims?.sub;
-    if (typeof existing === "string") return NextResponse.json({ userId: existing, balance: await initializeCreditAccount(existing) });
+    if (typeof existing === "string") {
+      const balance = await initializeCreditAccount(existing);
+      logEvent("guest_session_reused", { requestId: context.requestId, userIdHash: requestSubjectKey(request, existing), latencyMs: Date.now() - context.startedAt });
+      return apiOk(context, { userId: existing, isAnonymous: claims.data?.claims?.is_anonymous === true || claims.data?.claims?.is_anonymous === "true", balance });
+    }
     const { data, error } = await supabase.auth.signInAnonymously();
-    if (error || !data.user) return NextResponse.json({ error: error?.message ?? "Could not create a guest session." }, { status: 503 });
-    return NextResponse.json({ userId: data.user.id, balance: await initializeCreditAccount(data.user.id) });
+    if (error || !data.user) {
+      logEvent("guest_session_failed", { requestId: context.requestId, status: "provider_error" });
+      return apiError(context, "account_unavailable", "Could not create a guest session.", 503);
+    }
+    const balance = await initializeCreditAccount(data.user.id);
+    logEvent("guest_session_created", { requestId: context.requestId, userIdHash: requestSubjectKey(request, data.user.id), latencyMs: Date.now() - context.startedAt });
+    return apiOk(context, { userId: data.user.id, isAnonymous: true, balance });
   } catch (error) {
-    return NextResponse.json({ error: "Account service is not configured yet.", technical: process.env.NODE_ENV === "development" && error instanceof Error ? error.message : undefined }, { status: 503 });
+    if (error instanceof ApiRequestError) return apiError(context, error.code, error.message, error.status);
+    logEvent("guest_session_failed", { requestId: context.requestId, status: "configuration_or_backend" });
+    return apiError(context, "account_unavailable", "Account service is not available.", 503);
   }
 }
