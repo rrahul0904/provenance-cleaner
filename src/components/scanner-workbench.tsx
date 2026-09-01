@@ -1,11 +1,21 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { creditCostForText } from "@/lib/product-contract";
 import type { SanitizeReceipt, TextScanReceipt } from "@/lib/provenance/types";
-import { sanitizeText, scanText } from "@/lib/provenance/unicode";
+import { scanText } from "@/lib/provenance/unicode";
 import { TurnstileWidget } from "./turnstile-widget";
 
 const DEMO_TEXT = "A normal sentence\u200B with a hidden zero-width space.\nRTL control example: \u202Ereview me.";
+
+function messageFrom(payload: unknown, fallback: string) {
+  if (payload && typeof payload === "object") {
+    const error = (payload as { error?: unknown }).error;
+    if (typeof error === "string") return error;
+    if (error && typeof error === "object" && typeof (error as { message?: unknown }).message === "string") return (error as { message: string }).message;
+  }
+  return fallback;
+}
 
 export function ScannerWorkbench() {
   const [text, setText] = useState(DEMO_TEXT);
@@ -13,11 +23,13 @@ export function ScannerWorkbench() {
   const [sanitation, setSanitation] = useState<SanitizeReceipt | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [billingNote, setBillingNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [challengeReset, setChallengeReset] = useState(0);
   const onChallenge = useCallback((token: string | null) => setChallengeToken(token), []);
   const canScan = text.length > 0;
+  const estimatedCredits = useMemo(() => creditCostForText(text), [text]);
 
   const grouped = useMemo(() => {
     if (!receipt) return [];
@@ -29,6 +41,7 @@ export function ScannerWorkbench() {
     setFileName(sourceFile);
     setReceipt(null);
     setSanitation(null);
+    setBillingNote(null);
     setError(null);
   }
 
@@ -45,23 +58,34 @@ export function ScannerWorkbench() {
   function runScan() {
     setReceipt(scanText(text));
     setSanitation(null);
+    setBillingNote(null);
   }
 
   async function cleanConservatively() {
     if (!challengeToken || !canScan) return;
     setBusy(true);
     setError(null);
+    setBillingNote(null);
     try {
-      const response = await fetch("/api/auth/anonymous", {
+      const sessionResponse = await fetch("/api/auth/anonymous", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ challengeToken, forClean: true }),
       });
+      const sessionPayload = await sessionResponse.json();
+      if (!sessionResponse.ok) throw new Error(messageFrom(sessionPayload, "Could not prepare the clean operation."));
+
+      const response = await fetch("/api/text/sanitize", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operationId: crypto.randomUUID(), text, kind: fileName ? "txt" : "text" }),
+      });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error?.message ?? "Could not prepare the clean operation.");
-      const next = sanitizeText(text, "conservative");
+      if (!response.ok) throw new Error(messageFrom(payload, "Could not clean this text."));
+      const next = payload.sanitation as SanitizeReceipt;
       setSanitation(next);
       setReceipt(scanText(next.output));
+      setBillingNote(`${payload.billing.creditsCharged} credit${payload.billing.creditsCharged === 1 ? "" : "s"} charged · ${payload.billing.balanceAfter} remaining`);
       window.dispatchEvent(new Event("provenance:account-changed"));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not clean this text.");
@@ -79,16 +103,17 @@ export function ScannerWorkbench() {
         <div className="actions">
           <label className="secondary" style={{ cursor: "pointer" }}>Upload .txt<input type="file" accept=".txt,text/plain" hidden onChange={event => void loadTxt(event.target.files?.[0] ?? null)} /></label>
           <button className="ghost" onClick={() => replaceText(DEMO_TEXT)}>Try example</button>
-          {fileName && <span className="pill">{fileName}</span>}
+          {fileName && <span className="pill">TXT input</span>}
         </div>
         <textarea value={text} onChange={(event) => replaceText(event.target.value)} spellCheck={false} aria-label="Text to scan" />
         <div className="actions">
           <button className="primary" onClick={runScan} disabled={!canScan}>Scan text — free</button>
-          <button className="secondary" onClick={() => void cleanConservatively()} disabled={!canScan || busy || !challengeToken}>{busy ? "Preparing clean…" : "Clean safe findings"}</button>
+          <button className="secondary" onClick={() => void cleanConservatively()} disabled={!canScan || busy || !challengeToken}>{busy ? "Cleaning…" : `Clean safe findings · ${estimatedCredits} credit${estimatedCredits === 1 ? "" : "s"}`}</button>
           <button className="ghost" onClick={() => replaceText("")}>Clear</button>
         </div>
         <TurnstileWidget action="account" onToken={onChallenge} resetKey={challengeReset} />
-        <p className="privacy-note">Scanning is free and local. The first signed-out clean lazily creates a guest account and grants the one-time guest promotion; the text itself remains in your browser.</p>
+        <p className="privacy-note">Scanning is free and local. A billable clean lazily creates or reuses the guest/account, grants the one-time guest promotion when eligible, then sends the text through an ephemeral server request so the authoritative credit reservation and deterministic sanitation can be verified together. Raw text is not intentionally persisted.</p>
+        {billingNote && <div className="success-card">{billingNote}</div>}
         {error && <div className="error-card">{error}</div>}
       </div>
 
@@ -99,7 +124,7 @@ export function ScannerWorkbench() {
           {grouped.length > 0 && <div className="category-row">{grouped.map(([category, count]) => <span className="category" key={category}>{category.replaceAll("_", " ")} · {count}</span>)}</div>}
           <div className="findings">{receipt.findings.length === 0 ? <div className="success-card">No tracked hidden or unusual Unicode characters found.</div> : receipt.findings.map((finding) => <article className="finding" key={finding.id}><div><strong>{finding.codePoint} · {finding.characterName}</strong><p>{finding.description}</p><small>index {finding.index}</small></div><span className={finding.disposition === "safe_remove" ? "tag-safe" : "tag-review"}>{finding.disposition === "safe_remove" ? "safe remove" : "review"}</span></article>)}</div>
         </>}
-        {sanitation && <div className="clean-output"><div className="output-heading"><strong>Conservative cleaned output</strong><button className="copy" onClick={() => navigator.clipboard.writeText(sanitation.output)}>Copy</button></div><pre>{sanitation.output || "(empty)"}</pre><p>{sanitation.removed.length} removed · {sanitation.preservedForReview.length} preserved for review · post-clean scan {scanText(sanitation.output).summary.total === 0 ? "clear" : "requires review"}</p></div>}
+        {sanitation && <div className="clean-output"><div className="output-heading"><strong>Conservative cleaned output</strong><button className="copy" onClick={() => navigator.clipboard.writeText(sanitation.output)}>Copy</button></div><pre>{sanitation.output || "(empty)"}</pre><p>{sanitation.removed.length} removed · {sanitation.preservedForReview.length} preserved for review · post-clean scan {scanText(sanitation.output).summary.safeToRemove === 0 ? "safe removals clear" : "failed"}</p></div>}
       </div>
     </section>
   );

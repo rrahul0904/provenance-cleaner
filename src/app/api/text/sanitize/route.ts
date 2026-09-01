@@ -1,0 +1,76 @@
+import { z } from "zod";
+import { getRequestIdentity } from "@/lib/auth/identity";
+import { commitReservation, releaseReservation, reserveCredits } from "@/lib/billing/server";
+import { BillingDomainError } from "@/lib/billing/types";
+import { creditCostForText } from "@/lib/product-contract";
+import { sanitizeText, scanText } from "@/lib/provenance/unicode";
+import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
+import { logEvent, requestSubjectKey } from "@/lib/server/observability";
+import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
+
+export const runtime = "nodejs";
+const schema = z.object({
+  operationId: z.string().uuid(),
+  text: z.string().min(1).max(250_000),
+  kind: z.enum(["text", "txt"]).default("text"),
+});
+
+function wordBucket(words: number) {
+  if (words <= 250) return "<=250";
+  if (words <= 1_000) return "251-1000";
+  if (words <= 4_000) return "1001-4000";
+  if (words <= 8_000) return "4001-8000";
+  return ">8000";
+}
+
+function billingError(context: ReturnType<typeof requestContext>, error: BillingDomainError) {
+  if (error.code === "insufficient_credits") return apiError(context, error.code, "Not enough credits are available for this text cleaning job.", 402);
+  if (error.code === "rate_limited" || error.code === "daily_credit_limit") return apiError(context, error.code, "The text-cleaning billing limit has been reached. Try again later.", 429, retryAfter(60));
+  if (error.code === "operation_conflict") return apiError(context, error.code, "This text-cleaning operation has already been used.", 409);
+  return apiError(context, "billing_unavailable", "Billing is not available.", 503);
+}
+
+export async function POST(request: Request) {
+  const context = requestContext(request, "/api/text/sanitize");
+  let identity: Awaited<ReturnType<typeof getRequestIdentity>>;
+  try { identity = await getRequestIdentity(); } catch { return apiError(context, "account_unavailable", "Account service is not available.", 503); }
+  if (!identity) return apiError(context, "auth_required", "Start a guest session or sign in before cleaning text.", 401);
+
+  const subject = requestSubjectKey(request, identity.userId);
+  const burst = consumeRateLimit("text_sanitize", subject, configuredLimit("RATE_LIMIT_TEXT_PER_MINUTE", 8), 60_000);
+  if (!burst.allowed) return apiError(context, "rate_limited", "Too many text-cleaning requests. Try again shortly.", 429, retryAfter(burst.retryAfterSeconds));
+
+  let parsed: z.infer<typeof schema>;
+  try { parsed = await parseJson(request, schema, 300_000); }
+  catch (error) { return error instanceof ApiRequestError ? apiError(context, error.code, error.message, error.status) : apiError(context, "invalid_request", "Request is invalid.", 400); }
+
+  const before = scanText(parsed.text);
+  if (before.summary.safeToRemove === 0) return apiError(context, "nothing_to_clean", "No conservatively safe hidden characters are available to remove.", 409);
+  const sanitation = sanitizeText(parsed.text, "conservative");
+  const after = scanText(sanitation.output);
+  if (after.summary.safeToRemove !== 0) return apiError(context, "verification_failed", "The local-safe cleanup plan did not pass server verification.", 422);
+
+  const credits = creditCostForText(parsed.text);
+  let reservationId: string;
+  try {
+    const reservation = await reserveCredits(identity.userId, `sanitize:${parsed.kind}:${parsed.operationId}`, credits);
+    reservationId = reservation.reservationId;
+    if (!reservation.created || reservation.status !== "reserved") return apiError(context, "operation_conflict", "This text-cleaning operation is already in progress or complete.", 409);
+    logEvent("text_clean_reserved", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, inputKind: parsed.kind, wordBucket: wordBucket(before.input.words), credits });
+  } catch (error) {
+    return error instanceof BillingDomainError ? billingError(context, error) : apiError(context, "billing_unavailable", "Billing is not available.", 503);
+  }
+
+  try {
+    const balance = await commitReservation(identity.userId, reservationId);
+    logEvent("text_clean_completed", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, inputKind: parsed.kind, wordBucket: wordBucket(before.input.words), removedBucket: sanitation.removed.length <= 5 ? "1-5" : sanitation.removed.length <= 20 ? "6-20" : ">20", credits });
+    return apiOk(context, {
+      sanitation,
+      verification: { safeRemovalsBefore: before.summary.safeToRemove, safeRemovalsAfter: after.summary.safeToRemove },
+      billing: { operationId: parsed.operationId, reservationId, creditsCharged: credits, balanceAfter: balance.available },
+    });
+  } catch {
+    try { await releaseReservation(identity.userId, reservationId, "text_sanitize_commit_failed"); } catch { /* reservation TTL is final recovery */ }
+    return apiError(context, "billing_unavailable", "The clean operation could not be committed. The credit hold was released or will expire automatically.", 503);
+  }
+}
