@@ -25,19 +25,18 @@ export async function POST(request: Request) {
       return apiError(context, challenge.reason === "not_configured" ? "bot_protection_unavailable" : "bot_challenge_failed", challenge.reason === "not_configured" ? "Bot protection is not configured." : "Bot verification is required.", challenge.reason === "not_configured" ? 503 : 403);
     }
     const supabase = await createClient();
-    const claims = await supabase.auth.getClaims();
-    const existing = claims.data?.claims?.sub;
-    const existingAnonymous = claims.data?.claims?.is_anonymous === true;
-    if (typeof existing === "string") {
-      let balance = await initializeCreditAccount(existing);
+    const current = await supabase.auth.getUser();
+    const existing = current.data.user;
+    if (existing) {
+      let balance = await initializeCreditAccount(existing.id);
       let guestPromoGranted = false;
-      if (parsed.forClean && existingAnonymous) {
-        const promo = await grantGuestPromoCredits(existing);
+      if (parsed.forClean && existing.is_anonymous) {
+        const promo = await grantGuestPromoCredits(existing.id);
         balance = promo.balance;
         guestPromoGranted = promo.granted;
       }
-      logEvent("guest_session_reused", { requestId: context.requestId, userIdHash: requestSubjectKey(request, existing), guestPromoGranted, latencyMs: Date.now() - context.startedAt });
-      return apiOk(context, { userId: existing, isAnonymous: existingAnonymous, balance, guestPromoGranted });
+      logEvent("guest_session_reused", { requestId: context.requestId, userIdHash: requestSubjectKey(request, existing.id), guestPromoGranted, latencyMs: Date.now() - context.startedAt });
+      return apiOk(context, { userId: existing.id, isAnonymous: Boolean(existing.is_anonymous), balance, guestPromoGranted });
     }
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error || !data.user) {

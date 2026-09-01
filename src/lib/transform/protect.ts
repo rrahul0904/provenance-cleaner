@@ -17,20 +17,29 @@ const PATTERNS: Array<{ kind: ProtectedKind; regex: RegExp }> = [
   { kind: "number", regex: /(?<![\p{L}\p{N}_])(?:[+-]\s*)?(?:[$€£¥]\s*)?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?%?(?![\p{L}\p{N}_])/gu },
 ];
 
+const MULTI_ENTITY = /\b(?:[A-Z][\p{Ll}\p{M}'’.-]{1,}|[A-Z]{2,})(?:\s+(?:(?:of|the|and|&|for)\s+)?(?:[A-Z][\p{Ll}\p{M}'’.-]{1,}|[A-Z]{2,})){1,4}\b/gu;
+const CAMEL_ENTITY = /\b[A-Z][\p{Ll}\p{M}]{1,}[A-Z][\p{L}\p{M}\p{N}]*\b/gu;
+const ACRONYM_ENTITY = /\b[A-Z]{2,10}\b/g;
+
+function matches(regex: RegExp, text: string, kind: ProtectedKind): Candidate[] {
+  regex.lastIndex = 0;
+  const found: Candidate[] = [];
+  for (const match of text.matchAll(regex)) {
+    if (match.index === undefined) continue;
+    found.push({ kind, start: match.index, end: match.index + match[0].length, value: match[0] });
+  }
+  return found;
+}
+
 function candidatesFor(text: string): Candidate[] {
   const candidates: Candidate[] = [];
-  for (const { kind, regex } of PATTERNS) {
-    regex.lastIndex = 0;
-    for (const match of text.matchAll(regex)) {
-      if (match.index === undefined) continue;
-      candidates.push({
-        kind,
-        start: match.index,
-        end: match.index + match[0].length,
-        value: match[0],
-      });
-    }
-  }
+  for (const { kind, regex } of PATTERNS) candidates.push(...matches(regex, text, kind));
+  // Deterministic, bounded proper-name protection. Multi-token title-cased names cover
+  // people/organizations/places; mixed-case products and all-caps acronyms cover names
+  // such as OpenAI/C2PA-style references without an additional model call.
+  candidates.push(...matches(MULTI_ENTITY, text, "entity"));
+  candidates.push(...matches(CAMEL_ENTITY, text, "entity"));
+  candidates.push(...matches(ACRONYM_ENTITY, text, "entity"));
   return candidates;
 }
 

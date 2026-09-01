@@ -2,34 +2,24 @@ import { generateText } from "ai";
 import { z } from "zod";
 import { verifyTurnstile } from "@/lib/abuse/turnstile";
 import { getRequestIdentity } from "@/lib/auth/identity";
-import { creditCostForText } from "@/lib/billing/catalog";
 import { commitReservation, releaseReservation, reserveCredits } from "@/lib/billing/server";
 import { BillingDomainError } from "@/lib/billing/types";
-import { countWords, MAX_REWRITE_WORDS, validateRewriteWordCount } from "@/lib/product-contract";
+import { countWords, MAX_REWRITE_WORDS } from "@/lib/product-contract";
+import { planSanitizationJob, SanitizationContractError } from "@/lib/sanitization";
 import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
 import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
-import { chunkProtectedText, prepareProtectedText, TRANSFORM_MODES, TRANSFORM_SYSTEM, transformPrompt, validateTransformedDraft } from "@/lib/transform";
+import { chunkProtectedText, prepareProtectedText, TRANSFORM_MODES, TRANSFORM_SYSTEM, transformPrompt, unavailableTextWatermarkVerifier, validateTransformedDraft } from "@/lib/transform";
 import type { TransformMode, TransformResult } from "@/lib/transform";
 
 export const runtime = "nodejs";
 const DEFAULT_MODEL = "mistral/mistral-medium-3.5";
 const MAX_ATTEMPTS = 2;
 const PREVIEW_RELEASE_SMOKE_MARKER = "[[PROVENANCE_PREVIEW_RELEASE_SMOKE]]";
-const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().trim().min(20).max(250_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
+export const transformRequestSchema = z.object({ operationId: z.string().uuid(), text: z.string().trim().min(20).max(250_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
 
-function wordBucket(words: number) {
-  if (words <= 250) return "<=250";
-  if (words <= 1_000) return "251-1000";
-  if (words <= 4_000) return "1001-4000";
-  return "4001-8000";
-}
-function charBucket(chars: number) {
-  if (chars <= 2_000) return "<=2K";
-  if (chars <= 10_000) return "2K-10K";
-  if (chars <= 50_000) return "10K-50K";
-  return ">50K";
-}
+function wordBucket(words: number) { if (words <= 250) return "<=250"; if (words <= 1_000) return "251-1000"; if (words <= 4_000) return "1001-4000"; return "4001-8000"; }
+function charBucket(chars: number) { if (chars <= 2_000) return "<=2K"; if (chars <= 10_000) return "2K-10K"; if (chars <= 50_000) return "10K-50K"; return ">50K"; }
 
 async function generateAttempt(protectedText: string, mode: TransformMode, model: string, retryFeedback?: string) {
   const outputs: string[] = [];
@@ -54,17 +44,18 @@ export async function POST(request: Request) {
   if (!identity) return apiError(context, "auth_required", "Start a guest session or sign in before running an edit.", 401);
   const subject = requestSubjectKey(request, identity.userId);
   const burst = consumeRateLimit("transform", subject, configuredLimit("RATE_LIMIT_TRANSFORM_PER_MINUTE", 8), 60_000);
-  if (!burst.allowed) {
-    logEvent("rate_limit_triggered", { requestId: context.requestId, route: context.route, userIdHash: subject });
-    return apiError(context, "rate_limited", "Too many edit requests. Try again shortly.", 429, retryAfter(burst.retryAfterSeconds));
-  }
+  if (!burst.allowed) return apiError(context, "rate_limited", "Too many edit requests. Try again shortly.", 429, retryAfter(burst.retryAfterSeconds));
 
-  let parsed: z.infer<typeof bodySchema>;
-  try { parsed = await parseJson(request, bodySchema, 300_000); }
+  let parsed: z.infer<typeof transformRequestSchema>;
+  try { parsed = await parseJson(request, transformRequestSchema, 300_000); }
   catch (error) { return error instanceof ApiRequestError ? apiError(context, error.code, error.message, error.status) : apiError(context, "invalid_request", "Request is invalid.", 400); }
 
-  const rewriteLimit = validateRewriteWordCount(parsed.text);
-  if (!rewriteLimit.ok) return apiError(context, "rewrite_too_large", `Semantic editing accepts at most ${MAX_REWRITE_WORDS.toLocaleString("en-US")} words per operation. Split larger documents into parts.`, 413);
+  let job;
+  try { job = planSanitizationJob({ kind: "text", intent: "rewrite", text: parsed.text }); }
+  catch (error) {
+    if (error instanceof SanitizationContractError && error.code === "rewrite_too_large") return apiError(context, "rewrite_too_large", `Semantic editing accepts at most ${MAX_REWRITE_WORDS.toLocaleString("en-US")} words per operation. Split larger documents into parts.`, 413);
+    return apiError(context, "invalid_request", "The rewrite job does not satisfy the product contract.", 400);
+  }
 
   const challenge = await verifyTurnstile(parsed.challengeToken, "transform");
   if (!challenge.ok) {
@@ -72,7 +63,7 @@ export async function POST(request: Request) {
     return apiError(context, challenge.reason === "not_configured" ? "bot_protection_unavailable" : "bot_challenge_failed", challenge.reason === "not_configured" ? "Bot protection is not configured." : "Bot verification is required.", challenge.reason === "not_configured" ? 503 : 403);
   }
 
-  const cost = creditCostForText(parsed.text);
+  const cost = job.credits;
   const sourceWords = countWords(parsed.text);
   logEvent("transform_request", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, sourceSizeBucket: charBucket(parsed.text.length), sourceWordBucket: wordBucket(sourceWords), credits: cost, mode: parsed.mode });
   let reservationId: string;
@@ -82,10 +73,7 @@ export async function POST(request: Request) {
     if (!reservation.created || reservation.status !== "reserved") return apiError(context, "operation_conflict", "This edit operation is already in progress or complete.", 409);
     logEvent("credit_reservation", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, credits: cost });
   } catch (error) {
-    if (error instanceof BillingDomainError) {
-      logEvent(error.code === "insufficient_credits" ? "insufficient_credits" : "billing_reservation_rejected", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, status: error.code });
-      return billingError(context, error);
-    }
+    if (error instanceof BillingDomainError) return billingError(context, error);
     return apiError(context, "billing_unavailable", "Billing is not available.", 503);
   }
 
@@ -100,19 +88,41 @@ export async function POST(request: Request) {
       const validation = validateTransformedDraft(prepared, draft, parsed.mode);
       if (validation.ok && validation.restoredText) {
         const balance = await commitReservation(identity.userId, reservationId);
+        const watermark = await unavailableTextWatermarkVerifier.verify(validation.restoredText);
         logEvent("credit_commit", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, credits: cost });
         logEvent("transform_success", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, model, attempts: attempt, latencyMs: Date.now() - context.startedAt });
-        const result: TransformResult = { version: "semantic-transform-v2", text: validation.restoredText, mode: parsed.mode, model, attempts: attempt, metrics: validation.metrics, warnings: validation.warnings, billing: { operationId: parsed.operationId, reservationId, creditsCharged: cost, balanceAfter: balance.available } };
+        const result: TransformResult = {
+          version: "semantic-transform-v2",
+          text: validation.restoredText,
+          mode: parsed.mode,
+          model,
+          attempts: attempt,
+          metrics: validation.metrics,
+          receipt: {
+            sourceWords: validation.metrics.sourceWords,
+            outputWords: validation.metrics.outputWords,
+            retainedPercent: validation.metrics.retainedPercent,
+            wordingReplacedPercent: validation.metrics.wordingReplacedPercent,
+            longestUnprotectedSharedWordRun: validation.metrics.unprotectedLongestSharedWordRun,
+            protectedSpanCount: validation.metrics.protectedTotal,
+            checks: validation.checks,
+            model,
+            attempts: attempt,
+            creditsCharged: cost,
+          },
+          watermark,
+          warnings: validation.warnings,
+          billing: { operationId: parsed.operationId, reservationId, creditsCharged: cost, balanceAfter: balance.available },
+        };
         return apiOk(context, result as unknown as Record<string, unknown>);
       }
       retryFeedback = validation.errors.map(item => `- ${item}`).join("\n");
     }
     await releaseReservation(identity.userId, reservationId, "validation_failed");
     logEvent("transform_validation_failure", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, attempts: MAX_ATTEMPTS });
-    logEvent("reservation_release", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, status: "validation_failed" });
     return apiError(context, "validation_failed", "The edit did not pass factual-preservation checks. The credit hold was released.", 422);
   } catch {
-    try { await releaseReservation(identity.userId, reservationId, "generation_failed"); logEvent("reservation_release", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, status: "generation_failed" }); } catch { /* TTL expiry remains final recovery. */ }
+    try { await releaseReservation(identity.userId, reservationId, "generation_failed"); } catch { /* TTL expiry remains final recovery. */ }
     logEvent("model_provider_error", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, model, latencyMs: Date.now() - context.startedAt });
     return apiError(context, "model_unavailable", "The editing service is temporarily unavailable. The credit hold was released or will expire automatically.", 503);
   }
