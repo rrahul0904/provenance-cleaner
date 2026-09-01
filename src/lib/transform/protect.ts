@@ -14,7 +14,7 @@ const PATTERNS: Array<{ kind: ProtectedKind; regex: RegExp }> = [
   { kind: "quote", regex: /“[^”\n]{1,800}”|"[^"\n]{1,800}"/g },
   { kind: "citation", regex: /\[[0-9,;\s–—-]+\]|\([A-Z][A-Za-z'’-]+(?:\s+et al\.)?,?\s+\d{4}[a-z]?\)/g },
   { kind: "date", regex: /\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4})\b/gi },
-  { kind: "number", regex: /(?:[$€£¥]\s*)?\b\d[\d,]*(?:\.\d+)?%?\b/g },
+  { kind: "number", regex: /(?<![\p{L}\p{N}_])(?:[+-]\s*)?(?:[$€£¥]\s*)?\d[\d,]*(?:\.\d+)?%?(?![\p{L}\p{N}_])/gu },
 ];
 
 function candidatesFor(text: string): Candidate[] {

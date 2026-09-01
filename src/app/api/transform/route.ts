@@ -18,6 +18,19 @@ const MAX_ATTEMPTS = 2;
 const PREVIEW_RELEASE_SMOKE_MARKER = "[[PROVENANCE_PREVIEW_RELEASE_SMOKE]]";
 const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().trim().min(20).max(250_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
 
+function wordBucket(words: number) {
+  if (words <= 250) return "<=250";
+  if (words <= 1_000) return "251-1000";
+  if (words <= 4_000) return "1001-4000";
+  return "4001-8000";
+}
+function charBucket(chars: number) {
+  if (chars <= 2_000) return "<=2K";
+  if (chars <= 10_000) return "2K-10K";
+  if (chars <= 50_000) return "10K-50K";
+  return ">50K";
+}
+
 async function generateAttempt(protectedText: string, mode: TransformMode, model: string, retryFeedback?: string) {
   const outputs: string[] = [];
   for (const chunk of chunkProtectedText(protectedText)) {
@@ -61,7 +74,7 @@ export async function POST(request: Request) {
 
   const cost = creditCostForText(parsed.text);
   const sourceWords = countWords(parsed.text);
-  logEvent("transform_request", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, sourceChars: parsed.text.length, sourceWords, credits: cost });
+  logEvent("transform_request", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, sourceSizeBucket: charBucket(parsed.text.length), sourceWordBucket: wordBucket(sourceWords), credits: cost, mode: parsed.mode });
   let reservationId: string;
   try {
     const reservation = await reserveCredits(identity.userId, `transform:${parsed.operationId}`, cost);
