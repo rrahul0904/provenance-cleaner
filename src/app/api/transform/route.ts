@@ -14,6 +14,7 @@ import type { TransformMode, TransformResult } from "@/lib/transform";
 export const runtime = "nodejs";
 const DEFAULT_MODEL = "mistral/mistral-medium-3.5";
 const MAX_ATTEMPTS = 2;
+const PREVIEW_RELEASE_SMOKE_MARKER = "[[PROVENANCE_PREVIEW_RELEASE_SMOKE]]";
 const bodySchema = z.object({ operationId: z.string().uuid(), text: z.string().min(20).max(12_000), mode: z.enum(TRANSFORM_MODES), challengeToken: z.string().max(2048).optional() });
 
 async function generateAttempt(protectedText: string, mode: TransformMode, model: string, retryFeedback?: string) {
@@ -73,8 +74,10 @@ export async function POST(request: Request) {
 
   const prepared = prepareProtectedText(parsed.text);
   const model = process.env.TRANSFORM_MODEL ?? DEFAULT_MODEL;
+  const injectPreviewFailure = process.env.VERCEL_ENV === "preview" && parsed.text.includes(PREVIEW_RELEASE_SMOKE_MARKER);
   let retryFeedback: string | undefined;
   try {
+    if (injectPreviewFailure) throw new Error("controlled_preview_release_smoke");
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       const draft = await generateAttempt(prepared.protectedText, parsed.mode, model, retryFeedback);
       const validation = validateTransformedDraft(prepared, draft, parsed.mode);
