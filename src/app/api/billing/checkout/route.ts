@@ -38,6 +38,8 @@ export async function POST(request: Request) {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [{ price: pack.priceId, quantity: 1 }],
+      billing_address_collection: "required",
+      shipping_address_collection: { allowed_countries: ["US"] },
       client_reference_id: purchaseId,
       metadata: { purchase_id: purchaseId, pack_id: pack.id },
       success_url: `${origin}/?checkout=success`,
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
     }, { idempotencyKey: `credit-purchase:${purchaseId}` });
     if (!session.url) throw new Error("missing_checkout_url");
     await attachCheckoutSession(purchaseId, identity.userId, session.id);
-    logEvent("checkout_created", { requestId: context.requestId, userIdHash: subject, purchaseId, packId: pack.id, credits: pack.credits, latencyMs: Date.now() - context.startedAt });
+    logEvent("checkout_created", { requestId: context.requestId, userIdHash: subject, purchaseId, packId: pack.id, credits: pack.credits, countryPolicy: "US", latencyMs: Date.now() - context.startedAt });
     return apiOk(context, { url: session.url, pack: CREDIT_PACKS[parsed.packId] });
   } catch (error) {
     if (error instanceof ApiRequestError) return apiError(context, error.code, error.message, error.status);
