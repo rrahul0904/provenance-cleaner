@@ -8,14 +8,14 @@ import { createClient } from "@/lib/supabase/server";
 function safeInternalPath(value: string | null) { return value && value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/"; }
 export async function GET(request: Request) {
   const context = requestContext(request, "/auth/callback");
-  const url = new URL(request.url); const code = url.searchParams.get("code"); const next = safeInternalPath(url.searchParams.get("next"));
+  const url = new URL(request.url); const code = url.searchParams.get("code"); const next = safeInternalPath(url.searchParams.get("next")); const promoRequested = url.searchParams.get("promo") === "1";
   if (code) {
     try {
       const supabase = await createClient();
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error && data.user) {
         try { await initializeCreditAccount(data.user.id); } catch { /* auth remains valid if billing is not configured */ }
-        if (!data.user.is_anonymous && data.user.email) {
+        if (promoRequested && !data.user.is_anonymous && data.user.email) {
           try {
             const promo = await claimSignupPromoCredits(data.user.id, emailFingerprint(data.user.email));
             logEvent("signup_promo_claim", { requestId: context.requestId, userIdHash: hashIdentifier(data.user.id), granted: promo.granted });

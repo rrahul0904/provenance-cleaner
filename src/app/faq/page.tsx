@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const FAQ = [
   ["What can Provenance Cleaner verify?", "It can deterministically rescan tracked Unicode characters, verify supported metadata removal, calculate hashes, and validate protected factual spans around semantic edits. Those checks do not prove human authorship."],
   ["Why not use a generic rewrite prompt?", "The semantic editor protects URLs, emails, quotations, dates, numbers and other factual spans, then validates the returned draft before committing a credit debit."],
@@ -10,5 +12,5 @@ const FAQ = [
 ];
 
 export default function FaqPage() {
-  return <main className="shell"><header className="section-heading"><div><p className="eyebrow">FAQ</p><h1>What the product does—and what it does not claim.</h1></div><a href="/">Back to workbench</a></header><div className="stack">{FAQ.map(([question, answer]) => <section className="panel" key={question}><h2>{question}</h2><p>{answer}</p></section>)}</div></main>;
+  return <main className="shell"><header className="section-heading"><div><p className="eyebrow">FAQ</p><h1>What the product does—and what it does not claim.</h1></div><Link href="/">Back to workbench</Link></header><div className="stack">{FAQ.map(([question, answer]) => <section className="panel" key={question}><h2>{question}</h2><p>{answer}</p></section>)}</div></main>;
 }

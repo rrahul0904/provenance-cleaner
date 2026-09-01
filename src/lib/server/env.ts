@@ -30,6 +30,7 @@ export function publicAppOrigin(request?: Request) {
 export function readinessChecks(request?: Request): Record<string, ReadinessCheck> {
   const present = (name: string) => Boolean(process.env[name]?.trim());
   const stripeKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
+  const promoSecret = process.env.PROMO_FINGERPRINT_SECRET?.trim() ?? "";
   const preview = isVercelPreview();
   const oidc = hasOidc(request);
   const stripeTestKey = stripeKey.startsWith("sk_test_") || stripeKey.startsWith("rk_test_");
@@ -43,6 +44,7 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
     aiGateway: { configured: present("AI_GATEWAY_API_KEY") || oidc, required: true },
     turnstile: { configured: turnstileConfigured, required: true },
     rateLimitSalt: { configured: present("RATE_LIMIT_HASH_SALT") || oidc || (preview && Boolean(process.env.VERCEL_DEPLOYMENT_ID)), required: true },
+    promoFingerprintSecret: { configured: promoSecret.length >= 32, required: true },
     stripeTestMode: { configured: stripeTestKey && present("STRIPE_WEBHOOK_SECRET") && stripePricesConfigured, required: true },
     cron: { configured: present("CRON_SECRET"), required: !preview },
   };

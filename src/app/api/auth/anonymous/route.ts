@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const claims = await supabase.auth.getClaims();
     const existing = claims.data?.claims?.sub;
-    const existingAnonymous = claims.data?.claims?.is_anonymous === true || claims.data?.claims?.is_anonymous === "true";
+    const existingAnonymous = claims.data?.claims?.is_anonymous === true;
     if (typeof existing === "string") {
       let balance = await initializeCreditAccount(existing);
       let guestPromoGranted = false;

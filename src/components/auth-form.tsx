@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export function AuthForm() {
+  const router = useRouter();
   const supabase = useMemo(() => { try { return createClient(); } catch { return null; } }, []);
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
@@ -21,20 +23,21 @@ export function AuthForm() {
     setBusy(true); setMessage(null);
     try {
       if (mode === "signup") {
-        const redirectTo = `${window.location.origin}/auth/callback?next=/account`;
+        const redirectTo = `${window.location.origin}/auth/callback?next=/account&promo=1`;
         const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
         if (error) throw error;
         if (data.session) {
           await claimPromo();
-          window.location.assign("/account");
+          router.push("/account");
+          router.refresh();
           return;
         }
         setMessage("Check your email to confirm the account. The one-time signup credit grant is claimed after confirmation.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        await claimPromo();
-        window.location.assign("/account");
+        router.push("/account");
+        router.refresh();
       }
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : "Authentication could not be completed.");
@@ -44,7 +47,7 @@ export function AuthForm() {
   async function google() {
     if (!supabase) return;
     setBusy(true); setMessage(null);
-    const redirectTo = `${window.location.origin}/auth/callback?next=/account`;
+    const redirectTo = `${window.location.origin}/auth/callback?next=/account&promo=${mode === "signup" ? "1" : "0"}`;
     const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
     if (error) { setMessage("Google sign-in could not be started."); setBusy(false); }
   }
