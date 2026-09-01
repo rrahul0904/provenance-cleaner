@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { countWords, creditCostForText, MAX_REWRITE_WORDS } from "@/lib/product-contract";
 import type { TransformMode, TransformResult } from "@/lib/transform";
 import { TurnstileWidget } from "./turnstile-widget";
 
@@ -29,10 +30,12 @@ export function TransformWorkbench() {
   const [challengeReset, setChallengeReset] = useState(0);
   const onChallenge = useCallback((token: string | null) => setChallengeToken(token), []);
   const selectedMode = useMemo(() => MODES.find(item => item.id === mode)!, [mode]);
-  const estimatedCredits = useMemo(() => Math.max(1, Math.ceil(text.trim().split(/\s+/u).filter(Boolean).length / 1000)), [text]);
+  const words = useMemo(() => countWords(text), [text]);
+  const estimatedCredits = useMemo(() => creditCostForText(text), [text]);
+  const overLimit = words > MAX_REWRITE_WORDS;
 
   async function transform() {
-    if (!challengeToken) return;
+    if (!challengeToken || overLimit) return;
     setBusy(true); setError(null); setResult(null);
     try {
       const response = await fetch("/api/transform", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, challengeToken }) });
@@ -45,18 +48,19 @@ export function TransformWorkbench() {
 
   async function copyResult() { if (result) await navigator.clipboard.writeText(result.text); }
   return <section className="transform-section" aria-label="Semantics-preserving editor">
-    <div className="section-heading"><div><p className="eyebrow">Phase 5 · protected semantic editing</p><h2>Edit the prose. Keep the facts.</h2><p>Protected spans and deterministic validation sit around the language model. A bot challenge and burst shield protect the expensive endpoint; the database credit reservation remains the final economic gate.</p></div><span className="pill">~{estimatedCredits} credit{estimatedCredits === 1 ? "" : "s"}</span></div>
+    <div className="section-heading"><div><p className="eyebrow">Protected semantic editing</p><h2>Edit the prose. Keep the facts.</h2><p>Protected spans and deterministic validation sit around the language model. Each operation accepts up to {MAX_REWRITE_WORDS.toLocaleString()} words and commits credits only after the edit passes preservation checks.</p></div><span className="pill">~{estimatedCredits} credit{estimatedCredits === 1 ? "" : "s"}</span></div>
     <div className="transform-grid"><div className="panel transform-input-panel">
-      <div className="panel-heading"><div><p className="eyebrow">Source</p><h2>Choose an editing goal</h2></div><span className="pill">{text.length.toLocaleString()} / 12,000</span></div>
+      <div className="panel-heading"><div><p className="eyebrow">Source</p><h2>Choose an editing goal</h2></div><span className={`pill ${overLimit ? "warn" : ""}`}>{words.toLocaleString()} / {MAX_REWRITE_WORDS.toLocaleString()} words</span></div>
       <div className="mode-row" role="group" aria-label="Editing mode">{MODES.map(item => <button key={item.id} type="button" className={`mode-button ${mode === item.id ? "active" : ""}`} onClick={() => setMode(item.id)}>{item.label}</button>)}</div>
       <p className="mode-description">{selectedMode.description}</p>
-      <textarea value={text} maxLength={12_000} placeholder="Paste prose you want to edit…" onChange={event => setText(event.target.value)} />
+      <textarea value={text} maxLength={250_000} placeholder="Paste prose you want to edit…" onChange={event => setText(event.target.value)} />
+      {overLimit && <div className="error-card">This edit is {words.toLocaleString()} words. Split it into parts of at most {MAX_REWRITE_WORDS.toLocaleString()} words.</div>}
       <TurnstileWidget action="transform" onToken={onChallenge} resetKey={challengeReset} />
-      <div className="actions"><button className="primary" disabled={busy || text.trim().length < 20 || !challengeToken} onClick={transform}>{busy ? "Validating edit…" : `Edit for ${selectedMode.label.toLowerCase()}`}</button><button className="ghost" disabled={busy || !text} onClick={() => { setText(""); setResult(null); setError(null); }}>Clear</button></div>
+      <div className="actions"><button className="primary" disabled={busy || text.trim().length < 20 || overLimit || !challengeToken} onClick={transform}>{busy ? "Validating edit…" : `Edit for ${selectedMode.label.toLowerCase()}`}</button><button className="ghost" disabled={busy || !text} onClick={() => { setText(""); setResult(null); setError(null); }}>Clear</button></div>
       <p className="privacy-note">Text stays local until you explicitly run an edit. Raw source/result text is not intentionally persisted or written to operational logs.</p>{error && <div className="error-card">{error}</div>}
     </div><div className="panel transform-output-panel">
       <div className="panel-heading"><div><p className="eyebrow">Validated output</p><h2>{result ? "Edit passed preservation checks" : "Ready when you are"}</h2></div>{result && <span className="score ok">Validated</span>}</div>
-      {!result ? <div className="empty-state compact">Run an edit to see the revised prose, validation receipt, and committed credit charge.</div> : <><div className="transform-metrics"><Metric label="Protected" value={`${result.metrics.protectedPreserved}/${result.metrics.protectedTotal}`} /><Metric label="Length" value={`${Math.round(result.metrics.lengthRatio * 100)}%`} /><Metric label="Longest shared" value={`${result.metrics.longestSharedWordRun} words`} /><Metric label="3-gram overlap" value={`${Math.round(result.metrics.trigramOverlap * 100)}%`} /></div><div className="clean-output transform-output"><div className="output-heading"><strong>Revised prose</strong><button className="copy" onClick={copyResult}>Copy</button></div><pre>{result.text}</pre><p>{result.model} · {result.attempts} attempt{result.attempts === 1 ? "" : "s"} · {result.metrics.sourceWords} → {result.metrics.outputWords} words</p></div>{result.billing && <div className="verification-box"><strong>Billing receipt</strong><div className="verification-stats"><span>{result.billing.creditsCharged} credit{result.billing.creditsCharged === 1 ? "" : "s"} charged</span><span>{result.billing.balanceAfter} remaining</span><span>operation {result.billing.operationId.slice(0, 8)}</span></div><p>The debit was committed only after preservation validation passed.</p></div>}{result.warnings.length > 0 && <div className="notice-card"><strong>Review note</strong><ul>{result.warnings.map(w => <li key={w}>{w}</li>)}</ul></div>}<div className="verification-box"><strong>What “validated” means here</strong><p>Protected factual spans survived exactly and deterministic checks passed. It does not prove human authorship or detector performance.</p></div></>}
+      {!result ? <div className="empty-state compact">Run an edit to see the revised prose, deterministic receipt, and committed credit charge.</div> : <><div className="transform-metrics"><Metric label="Protected" value={`${result.metrics.protectedPreserved}/${result.metrics.protectedTotal}`} /><Metric label="Length retained" value={`${Math.round(result.metrics.lengthRatio * 100)}%`} /><Metric label="Longest shared" value={`${result.metrics.longestSharedWordRun} words`} /><Metric label="3-gram overlap" value={`${Math.round(result.metrics.trigramOverlap * 100)}%`} /></div><div className="clean-output transform-output"><div className="output-heading"><strong>Revised prose</strong><button className="copy" onClick={copyResult}>Copy</button></div><pre>{result.text}</pre><p>{result.model} · {result.attempts} attempt{result.attempts === 1 ? "" : "s"} · {result.metrics.sourceWords} → {result.metrics.outputWords} words</p></div>{result.billing && <div className="verification-box"><strong>Billing receipt</strong><div className="verification-stats"><span>{result.billing.creditsCharged} credit{result.billing.creditsCharged === 1 ? "" : "s"} charged</span><span>{result.billing.balanceAfter} remaining</span><span>operation {result.billing.operationId.slice(0, 8)}</span></div><p>The debit was committed only after preservation validation passed.</p></div>}{result.warnings.length > 0 && <div className="notice-card"><strong>Review note</strong><ul>{result.warnings.map(w => <li key={w}>{w}</li>)}</ul></div>}<div className="verification-box"><strong>What “validated” means here</strong><p>Protected factual spans survived exactly and deterministic checks passed. It does not prove human authorship or detector performance.</p></div></>}
     </div></div>
   </section>;
 }
