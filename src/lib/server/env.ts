@@ -2,6 +2,8 @@ export type ReadinessCheck = { configured: boolean; required: boolean };
 const DEFAULT_SUPABASE_URL = "https://cikxzxxreryycfjumwsd.supabase.co";
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Jsa3NElnKfCPiXMes-CrXg_hthFy4r1";
 const CONTROLLED_LAUNCH_TEST_PRICE_IDS = ["price_1UAXO6RB8OGmEnBwqpc4DaLs", "price_1UAXOFRB8OGmEnBwlAwgU1GS", "price_1UAXOQRB8OGmEnBwANqar75f"];
+const SUPPORT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const PLACEHOLDER_SUPPORT_EMAIL = /(^|@)(example\.(com|invalid|org)|invalid|localhost)$|placeholder/iu;
 
 function isVercelPreview() { return process.env.VERCEL_ENV === "preview"; }
 function vercelOrigin() {
@@ -15,6 +17,10 @@ function hasOidc(request?: Request) {
 }
 
 export function isDevelopmentTurnstileBypass() { return process.env.NODE_ENV !== "production" && process.env.TURNSTILE_DEV_BYPASS === "1"; }
+export function isConfiguredSupportEmail(value: string | undefined) {
+  const email = value?.trim() ?? "";
+  return SUPPORT_EMAIL_PATTERN.test(email) && !PLACEHOLDER_SUPPORT_EMAIL.test(email);
+}
 export function publicAppOrigin(request?: Request) {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
   const candidate = configured || vercelOrigin();
@@ -38,7 +44,7 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
   const publicSupabaseConfigured = (present("NEXT_PUBLIC_SUPABASE_URL") || Boolean(DEFAULT_SUPABASE_URL)) && (present("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") || Boolean(DEFAULT_SUPABASE_PUBLISHABLE_KEY));
   const turnstileConfigured = (present("NEXT_PUBLIC_TURNSTILE_SITE_KEY") && present("TURNSTILE_SECRET_KEY")) || preview;
   const stripePricesConfigured = (present("STRIPE_PRICE_STARTER") && present("STRIPE_PRICE_PLUS") && present("STRIPE_PRICE_PRO")) || (stripeTestKey && CONTROLLED_LAUNCH_TEST_PRICE_IDS.every(Boolean));
-  const supportEmailConfigured = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(supportEmail);
+  const supportEmailConfigured = isConfiguredSupportEmail(supportEmail);
   return {
     appUrl: { configured: present("NEXT_PUBLIC_APP_URL") || Boolean(vercelOrigin()), required: true },
     supabasePublic: { configured: publicSupabaseConfigured, required: true },

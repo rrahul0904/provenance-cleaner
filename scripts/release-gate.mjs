@@ -14,7 +14,9 @@ const requiredClient = ["NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT
 const requiredServer = ["SUPABASE_SECRET_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "TURNSTILE_SECRET_KEY", "RATE_LIMIT_HASH_SALT", "PROMO_FINGERPRINT_SECRET", "CRON_SECRET", "STRIPE_PRICE_STARTER", "STRIPE_PRICE_PLUS", "STRIPE_PRICE_PRO"];
 for (const name of [...requiredClient, ...requiredServer]) add(`env:${name}`, Boolean(process.env[name]), process.env[name] ? "configured" : "missing");
 add("PROMO_FINGERPRINT_SECRET length", (process.env.PROMO_FINGERPRINT_SECRET?.length ?? 0) >= 32, process.env.PROMO_FINGERPRINT_SECRET ? "configured" : "missing");
-add("Support email format", /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ?? ""), process.env.NEXT_PUBLIC_SUPPORT_EMAIL ? "configured" : "missing");
+const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ?? "";
+const supportEmailConfigured = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(supportEmail) && !/(^|@)(example\.(com|invalid|org)|invalid|localhost)$|placeholder/iu.test(supportEmail);
+add("Production support email", supportEmailConfigured, supportEmail ? "configured" : "missing");
 
 if (process.env.STRIPE_SECRET_KEY) add("Stripe test mode", process.env.STRIPE_SECRET_KEY.startsWith("sk_test_") || process.env.STRIPE_SECRET_KEY.startsWith("rk_test_"), "live keys are forbidden during controlled launch");
 if (process.env.NEXT_PUBLIC_APP_URL) add("HTTPS app URL", /^https:\/\//.test(process.env.NEXT_PUBLIC_APP_URL), process.env.NEXT_PUBLIC_APP_URL);
