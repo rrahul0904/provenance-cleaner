@@ -42,6 +42,38 @@ test("source canary is not persisted in browser storage after a free scan", asyn
   expect(persisted).toEqual({ local: false, session: false, indexedDbName: false, cacheName: false, cookie: false });
 });
 
+test("free scan creates an accessible exportable receipt drawer without persisting source text", async ({ page }) => {
+  const canary = `PC_RECEIPT_${crypto.randomUUID()}`;
+  await page.goto("/");
+  const scanner = page.getByRole("region", { name: "Provenance text scanner" });
+  await scanner.getByLabel("Text to scan").fill(`${canary}\u200B review`);
+  await scanner.getByRole("button", { name: "Scan text" }).click();
+  const latestReceipt = page.getByRole("button", { name: "View latest verification receipt" });
+  await expect(latestReceipt).toBeVisible();
+  await latestReceipt.click();
+  const dialog = page.getByRole("dialog", { name: "Text inspection receipt" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("text.scan")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Export JSON receipt" })).toBeVisible();
+  await expect(dialog).not.toContainText(canary);
+});
+
+test("mobile navigation remains available and keyboard dismissible", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const trigger = page.getByRole("button", { name: "Open navigation" });
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const mobileNav = page.getByRole("navigation", { name: "Mobile primary" });
+  await expect(mobileNav).toBeVisible();
+  await expect(mobileNav.getByRole("link", { name: /Workbench/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Start free scan" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await assertNoHorizontalOverflow(page);
+});
+
 test("contact message stays client-side and only prepares mailto behavior", async ({ page }) => {
   const canary = `PC_CONTACT_${crypto.randomUUID()}`;
   const applicationPosts: string[] = [];
