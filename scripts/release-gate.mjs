@@ -21,6 +21,21 @@ if (process.env.NEXT_PUBLIC_APP_URL) add("HTTPS app URL", /^https:\/\//.test(pro
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 add("Pinned dependencies", Object.values({ ...(packageJson.dependencies ?? {}), ...(packageJson.devDependencies ?? {}) }).every(v => /^\d+\.\d+\.\d+/.test(v)), "no ranges allowed");
 
+const finalPhase6Migration = "supabase/migrations/20260902034500_phase6_deletion_recovery.sql";
+add("Final Phase 6 recovery migration committed", existsSync(finalPhase6Migration), finalPhase6Migration);
+if (existsSync(finalPhase6Migration)) {
+  const migration = readFileSync(finalPhase6Migration, "utf8");
+  add("Phase 6 recovery schema version", migration.includes("'schemaVersion', '20260902034500'"), "20260902034500");
+  add("Phase 6 stale deletion recovery", migration.includes("deletion_requested_at <= now() - interval '10 minutes'"), "failed prepare/cancel paths recover automatically");
+}
+const readinessPath = "src/app/api/readiness/route.ts";
+if (existsSync(readinessPath)) {
+  const readiness = readFileSync(readinessPath, "utf8");
+  add("Readiness requires final Phase 6", readiness.includes('REQUIRED_PHASE6_SCHEMA = "20260902034500"'), "exact database schema required");
+} else {
+  add("Readiness requires final Phase 6", false, "readiness route missing");
+}
+
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name} — ${item.detail}`);
 const failed = checks.filter(item => !item.ok);
 if (failed.length) {
