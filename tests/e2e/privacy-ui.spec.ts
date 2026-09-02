@@ -62,7 +62,7 @@ test("unicode findings map to an interactive source preview", async ({ page }) =
 
   const explorer = scanner.getByTestId("forensic-text-explorer");
   await expect(explorer).toBeVisible();
-  const marker = explorer.getByRole("button", { name: /Select U\+200B at index/ });
+  const marker = explorer.getByRole("button", { name: "Select U+200B at index 15", exact: true });
   await expect(marker).toBeVisible();
   await marker.click();
   await expect(marker).toHaveAttribute("aria-pressed", "true");

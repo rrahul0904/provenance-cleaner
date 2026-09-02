@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { grantGuestPromoCredits, initializeCreditAccount } from "@/lib/billing/server";
-import { createClient } from "@/lib/supabase/server";
+import { applyAuthCookies, createClient, type AuthCookie } from "@/lib/supabase/server";
 import { verifyTurnstile } from "@/lib/abuse/turnstile";
 import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
@@ -11,6 +11,7 @@ const schema = z.object({ challengeToken: z.string().max(2048).optional(), forCl
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/auth/anonymous");
+  const authCookies: AuthCookie[] = [];
   const subject = requestSubjectKey(request);
   const limit = consumeRateLimit("guest", subject, configuredLimit("RATE_LIMIT_GUEST_PER_MINUTE", 4), 60_000);
   if (!limit.allowed) {
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
       logEvent("bot_challenge_failed", { requestId: context.requestId, route: context.route, reason: challenge.reason ?? "unknown" });
       return apiError(context, challenge.reason === "not_configured" ? "bot_protection_unavailable" : "bot_challenge_failed", challenge.reason === "not_configured" ? "Bot protection is not configured." : "Bot verification is required.", challenge.reason === "not_configured" ? 503 : 403);
     }
-    const supabase = await createClient();
+    const supabase = await createClient((cookiesToSet) => authCookies.push(...cookiesToSet));
     const current = await supabase.auth.getUser();
     const existing = current.data.user;
     if (existing) {
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
         guestPromoGranted = promo.granted;
       }
       logEvent("guest_session_reused", { requestId: context.requestId, userIdHash: requestSubjectKey(request, existing.id), guestPromoGranted, latencyMs: Date.now() - context.startedAt });
-      return apiOk(context, { userId: existing.id, isAnonymous: Boolean(existing.is_anonymous), balance, guestPromoGranted });
+      return applyAuthCookies(apiOk(context, { userId: existing.id, isAnonymous: Boolean(existing.is_anonymous), balance, guestPromoGranted }), authCookies);
     }
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error || !data.user) {
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       guestPromoGranted = promo.granted;
     }
     logEvent("guest_session_created", { requestId: context.requestId, userIdHash: requestSubjectKey(request, data.user.id), guestPromoGranted, latencyMs: Date.now() - context.startedAt });
-    return apiOk(context, { userId: data.user.id, isAnonymous: true, balance, guestPromoGranted });
+    return applyAuthCookies(apiOk(context, { userId: data.user.id, isAnonymous: true, balance, guestPromoGranted }), authCookies);
   } catch (error) {
     if (error instanceof ApiRequestError) return apiError(context, error.code, error.message, error.status);
     logEvent("guest_session_failed", { requestId: context.requestId, status: "configuration_or_backend" });

@@ -3,15 +3,16 @@ import { emailFingerprint } from "@/lib/auth/email-fingerprint";
 import { claimSignupPromoCredits, initializeCreditAccount } from "@/lib/billing/server";
 import { requestContext } from "@/lib/server/api";
 import { hashIdentifier, logEvent } from "@/lib/server/observability";
-import { createClient } from "@/lib/supabase/server";
+import { applyAuthCookies, createClient, type AuthCookie } from "@/lib/supabase/server";
 
 function safeInternalPath(value: string | null) { return value && value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/"; }
 export async function GET(request: Request) {
   const context = requestContext(request, "/auth/callback");
+  const authCookies: AuthCookie[] = [];
   const url = new URL(request.url); const code = url.searchParams.get("code"); const next = safeInternalPath(url.searchParams.get("next")); const promoRequested = url.searchParams.get("promo") === "1";
   if (code) {
     try {
-      const supabase = await createClient();
+      const supabase = await createClient((cookiesToSet) => authCookies.push(...cookiesToSet));
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error && data.user) {
         try { await initializeCreditAccount(data.user.id); } catch { /* auth remains valid if billing is not configured */ }
@@ -27,5 +28,5 @@ export async function GET(request: Request) {
       }
     } catch { logEvent("oauth_callback_failed", { requestId: context.requestId, status: "configuration_or_provider" }); }
   }
-  const response = NextResponse.redirect(new URL(next, url.origin)); response.headers.set("x-request-id", context.requestId); return response;
+  const response = NextResponse.redirect(new URL(next, url.origin)); response.headers.set("x-request-id", context.requestId); return applyAuthCookies(response, authCookies);
 }
