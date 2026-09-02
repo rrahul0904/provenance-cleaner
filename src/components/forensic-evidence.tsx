@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { TextFinding } from "@/lib/provenance/types";
 import { prepareProtectedText } from "@/lib/transform";
 import type { ProtectedSpan, TransformResult } from "@/lib/transform";
@@ -34,15 +34,8 @@ function sourceContext(text: string, finding: TextFinding) {
 }
 
 export function ForensicTextPreview({ text, findings }: { text: string; findings: TextFinding[] }) {
-  const [selectedId, setSelectedId] = useState<string | null>(findings[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-
-  useEffect(() => {
-    if (!findings.some((finding) => finding.id === selectedId)) {
-      setSelectedId(findings[0]?.id ?? null);
-    }
-  }, [findings, selectedId]);
-
   const selected = findings.find((finding) => finding.id === selectedId) ?? findings[0] ?? null;
   const context = selected ? sourceContext(text, selected) : null;
 
