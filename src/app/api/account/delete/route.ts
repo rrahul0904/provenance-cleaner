@@ -7,7 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime="nodejs";
 const schema=z.object({confirmation:z.literal("DELETE")});
-function isReady(value:unknown){return Boolean(value&&typeof value==="object"&&!Array.isArray(value)&&(value as Record<string,unknown>).ready===true&&(value as Record<string,unknown>).schemaVersion==="20260901185200");}
+const REQUIRED_PHASE6_SCHEMA="20260902034500";
+function isReady(value:unknown){return Boolean(value&&typeof value==="object"&&!Array.isArray(value)&&(value as Record<string,unknown>).ready===true&&(value as Record<string,unknown>).schemaVersion===REQUIRED_PHASE6_SCHEMA);}
 
 export async function POST(request:Request){
   const context=requestContext(request,"/api/account/delete");
@@ -23,14 +24,17 @@ export async function POST(request:Request){
     await prepareAccountDeletion(identity.userId);prepared=true;
     const admin=createAdminClient();
     const {error}=await admin.auth.admin.deleteUser(identity.userId);
-    if(error){try{await cancelAccountDeletion(identity.userId);}catch{/* account remains blocked until reconciliation/manual repair */}prepared=false;throw error;}
+    if(error){
+      try{await cancelAccountDeletion(identity.userId);prepared=false;}catch{/* outer catch retries; cron clears a stale marker if both attempts fail */}
+      throw error;
+    }
     let reconciliationPending=false;
-    try{await finalizeAccountDeletion(identity.userId);}catch{reconciliationPending=true;}
+    try{await finalizeAccountDeletion(identity.userId);prepared=false;}catch{reconciliationPending=true;prepared=false;}
     logEvent("account_deleted",{requestId:context.requestId,userIdHash,reconciliationPending});
     return apiOk(context,{deleted:true,reconciliationPending});
   }catch(error){
     if(error instanceof ApiRequestError)return apiError(context,error.code,error.message,error.status);
-    if(prepared&&identity){try{await cancelAccountDeletion(identity.userId);}catch{/* best effort only when Auth deletion did not complete */}}
+    if(prepared&&identity){try{await cancelAccountDeletion(identity.userId);prepared=false;}catch{/* cron safely cancels stale pending deletion when the Auth identity still exists */}}
     logEvent("account_delete_failed",{requestId:context.requestId,subjectHash:requestSubjectKey(request)});
     return apiError(context,"account_delete_failed","Account deletion could not be completed.",503);
   }
