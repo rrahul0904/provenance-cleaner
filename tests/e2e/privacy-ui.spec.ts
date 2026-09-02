@@ -61,16 +61,20 @@ test("free scan creates an accessible exportable receipt drawer without persisti
 test("mobile navigation remains available and keyboard dismissible", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const trigger = page.getByRole("button", { name: "Open navigation" });
+  const trigger = page.locator('button[aria-controls="mobile-navigation"]');
   await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-label", "Open navigation");
   await trigger.click();
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
-  const mobileNav = page.getByRole("navigation", { name: "Mobile primary" });
+  await expect(trigger).toHaveAttribute("aria-label", "Close navigation");
+  const mobileContainer = page.locator("#mobile-navigation");
+  const mobileNav = mobileContainer.getByRole("navigation", { name: "Mobile primary" });
   await expect(mobileNav).toBeVisible();
   await expect(mobileNav.getByRole("link", { name: /Workbench/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Start free scan" })).toBeVisible();
+  await expect(mobileContainer.getByRole("link", { name: "Start free scan" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger).toHaveAttribute("aria-label", "Open navigation");
   await assertNoHorizontalOverflow(page);
 });
 
