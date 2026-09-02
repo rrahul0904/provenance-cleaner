@@ -59,15 +59,16 @@ test("contact message stays client-side and only prepares mailto behavior", asyn
   expect(await page.evaluate(marker => document.documentElement.innerHTML.includes(marker), canary)).toBe(true);
 });
 
-test("public surfaces have labeled controls, main landmarks and no horizontal overflow across launch widths", async ({ page }) => {
+test("public surfaces have main landmarks and no horizontal overflow across launch widths", async ({ page }) => {
   test.setTimeout(120_000);
   const widths = [375, 390, 768, 1024, 1440];
-  const routes = ["/", "/pricing", "/auth", "/contact", "/privacy", "/terms", "/cookies", "/faq", "/how-it-works", "/capabilities", "/mission"];
+  const routes = ["/", "/pricing", "/auth", "/contact", "/privacy-policy", "/terms-of-service", "/cookie-policy", "/faq", "/how-it-works", "/capabilities", "/mission"];
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
     for (const route of routes) {
-      await page.goto(route, { waitUntil: "domcontentloaded" });
-      await expect(page.locator("main").first()).toBeVisible();
+      const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+      expect(response?.status(), `${route} should be a public route`).toBeLessThan(400);
+      await expect(page.locator("main").first(), `${route} should expose a main landmark`).toBeVisible();
       await assertNoHorizontalOverflow(page);
     }
   }
