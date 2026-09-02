@@ -1,25 +1,8 @@
-import Link from "next/link";
 import { CREDIT_PACKS } from "@/lib/billing/catalog";
 import { MAX_FILE_BYTES, MAX_REWRITE_WORDS } from "@/lib/product-contract";
+import { PageHero } from "@/components/quiet-forensics";
 import { PricingCalculator } from "@/components/pricing-calculator";
 
 export default function PricingPage() {
-  return <main className="shell">
-    <header className="section-heading"><div><p className="eyebrow">Pricing</p><h1>Pay for successful cleaning work, not scanning.</h1><p>Scanning is free. New guests can receive 2 promotional credits on their first clean, and a real account can claim 3 additional signup credits once. Credits do not expire under normal use.</p></div><Link href="/">Back to workbench</Link></header>
-    <section className="principles">
-      {Object.values(CREDIT_PACKS).map(pack => <div key={pack.id}><span>{pack.credits} credits</span><h3>{pack.label} · ${pack.priceUsd.toFixed(2)}</h3><p>One-time TEST/hosted Checkout pack. No subscription or automatic renewal.</p></div>)}
-    </section>
-    <PricingCalculator />
-    <section className="panel">
-      <p className="eyebrow">Job rules</p>
-      <h2>What costs a credit?</h2>
-      <ul>
-        <li>Pasted text and .txt: 1 credit per 1,000 source words, rounded up.</li>
-        <li>Semantic rewrite: maximum {MAX_REWRITE_WORDS.toLocaleString()} words per operation.</li>
-        <li>DOCX, PNG and JPEG cleaning jobs: flat 1 credit each, up to {(MAX_FILE_BYTES / (1024 * 1024)).toFixed(1)} MB.</li>
-        <li>Free scans never debit credits.</li>
-        <li>Failed reserved operations release the hold instead of committing a debit.</li>
-      </ul>
-    </section>
-  </main>;
+  return <main id="main-content"><PageHero eyebrow="Pricing" title="Pay for successful cleaning work, not scanning." copy="Inspect for free. Spend credits only when you ask Provenance Cleaner to clean or transform content under an explicit verification contract." aside="Credits are reserved before billable work and committed only after verified success. Failed jobs release the hold."/><section className="shell pricing-model"><div className="pricing-free"><p className="eyebrow">Always free</p><h2>Inspection should not cost trust.</h2><div className="pricing-list"><span>Unicode / text scan</span><strong>0 credits</strong><span>File metadata inspection</span><strong>0 credits</strong><span>C2PA verification</span><strong>0 credits</strong></div></div><div className="pricing-credit"><p className="eyebrow">Credits</p><h2>Pay only for successful actions.</h2><div className="pricing-list"><span>Text / TXT cleaning</span><strong>1 / 1,000 words</strong><span>DOCX / PNG / JPEG sanitation</span><strong>1 credit</strong><span>Semantic rewrite</span><strong>word-based</strong></div></div></section><section className="shell credit-pack-grid">{Object.values(CREDIT_PACKS).map((pack,index)=><article className={`credit-pack-card ${index===1?"featured":""}`} key={pack.id}><span className="mono-label">{index===1?"MOST FLEXIBLE":"ONE-TIME PACK"}</span><strong>+{pack.credits}</strong><h2>{pack.label}</h2><p>${pack.priceUsd.toFixed(2)} · hosted Stripe TEST Checkout · no subscription</p><div className="pack-unit">${(pack.priceUsd/pack.credits).toFixed(2)} / credit</div></article>)}</section><div className="shell"><PricingCalculator /><section className="panel pricing-rules"><p className="eyebrow">Job rules</p><h2>What costs a credit?</h2><div className="rule-grid"><div><strong>Text & TXT</strong><p>1 credit per 1,000 source words, rounded up.</p></div><div><strong>Semantic edit</strong><p>Up to {MAX_REWRITE_WORDS.toLocaleString()} source words per operation.</p></div><div><strong>Files</strong><p>DOCX, PNG and JPEG sanitation is 1 credit, up to {(MAX_FILE_BYTES/(1024*1024)).toFixed(1)} MB.</p></div><div><strong>Failure</strong><p>Reserved credits are released instead of becoming a successful debit.</p></div></div></section></div></main>;
 }

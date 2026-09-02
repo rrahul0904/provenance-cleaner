@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ReceiptDrawer } from "@/components/receipt-drawer";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import "./globals.css";
+import "./quiet-forensics.css";
 
 export const metadata: Metadata = {
   title: "Provenance Cleaner — Content integrity workbench",

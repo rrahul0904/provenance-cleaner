@@ -1,16 +1,14 @@
-import Link from "next/link";
-
-const FAQ = [
-  ["What can Provenance Cleaner verify?", "It can deterministically rescan tracked Unicode characters, verify supported metadata removal, calculate hashes, and validate protected factual spans around semantic edits. Those checks do not prove human authorship."],
-  ["Why not use a generic rewrite prompt?", "The semantic editor protects URLs, emails, quotations, dates, numbers and other factual spans, then validates the returned draft before committing a credit debit."],
-  ["What if a scan finds nothing?", "Nothing is charged. Scanning is free and can be repeated without creating an account."],
-  ["Which inputs are supported?", "Paste and .txt use the text route. DOCX supports Unicode/metadata hygiene. PNG and JPEG use metadata hygiene. Existing PDF/WebP inspection remains available as an additional Provenance Cleaner capability."],
-  ["Do credits expire?", "No automatic expiration is applied under the current product contract."],
-  ["What happens if an edit fails?", "A reserved credit hold is released rather than committed. The append-only ledger records successful debits only after validation."],
-  ["Can purchased credits be refunded?", "The parity work includes a support/accounting model for unused purchased credits within the configured refund window. Real refunds remain a verified Stripe operation, not a client-side balance edit."],
-  ["Does metadata cleaning preserve signed provenance?", "Signed provenance is handled more conservatively than ordinary privacy metadata. If a byte change could invalidate a hard binding, the app blocks silent sanitation and explains the consequence."],
-];
-
-export default function FaqPage() {
-  return <main className="shell"><header className="section-heading"><div><p className="eyebrow">FAQ</p><h1>What the product does—and what it does not claim.</h1></div><Link href="/">Back to workbench</Link></header><div className="stack">{FAQ.map(([question, answer]) => <section className="panel" key={question}><h2>{question}</h2><p>{answer}</p></section>)}</div></main>;
-}
+import { PageHero } from "@/components/quiet-forensics";
+const FAQ=[
+["What is free?","Unicode/text scanning, supported file inspection, and Content Credentials verification do not debit credits. A guest account is not required just to scan."],
+["What costs credits?","Conservative text/TXT cleaning, DOCX/PNG/JPEG sanitation, and protected semantic editing are billable actions. The UI shows the estimated credit cost before the action."],
+["Which inputs are supported?","Paste and .txt use the text route. DOCX supports hidden-character and Office metadata hygiene. PNG and JPEG support metadata hygiene. PDF/WebP remain advanced inspection-only paths."],
+["Why are PDFs inspection-only?","Safely rewriting arbitrary PDFs requires a structure-aware writer that preserves cross-reference tables, signatures, forms, attachments and other document structures."],
+["Why can signed provenance block sanitation?","A byte change can invalidate cryptographically bound authenticity information. Provenance Cleaner therefore separates signed provenance from ordinary privacy metadata and blocks silent destructive sanitation."],
+["What does Validated mean?","It means the operation-specific deterministic checks passed: for example safe removals were re-scanned or protected factual spans survived an edit. It does not prove human authorship or guarantee detector evasion."],
+["What if a billable job fails?","A reserved credit hold is released instead of being committed as a successful debit."],
+["Can purchased credits be refunded?","Signed-in users can request a refund of eligible unused purchased credits within the configured 30-day window. Stripe remains the payment authority; the client never edits the balance optimistically."],
+["What does the product retain?","Operational credit, purchase and privacy-safe job metadata may be retained. Submitted text, transformed prose, file bytes and filenames are not intentionally retained as job history."],
+["What happens to a guest account?","A guest can be upgraded through email verification or Google identity linking while preserving the same user identity, credits and history. Clearing browser session state does not trigger fingerprint-based guest recovery."],
+] as const;
+export default function FaqPage(){return <main id="main-content"><PageHero eyebrow="FAQ" title="Clear answers for a product built on evidence." copy="The product should be explicit about what is free, what is billable, what is verified, what is intentionally unsupported, and what data is retained."/><section className="shell faq-list">{FAQ.map(([question,answer],index)=><details className="faq-card" key={question} open={index===0}><summary><span>{String(index+1).padStart(2,"0")}</span><strong>{question}</strong><i>+</i></summary><p>{answer}</p></details>)}</section></main>}
