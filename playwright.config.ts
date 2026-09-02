@@ -19,7 +19,8 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_e2e_only",
       NEXT_PUBLIC_TURNSTILE_TEST_BYPASS: "1",
-      TURNSTILE_DEV_BYPASS: "1"
+      TURNSTILE_DEV_BYPASS: "1",
+      NEXT_PUBLIC_SUPPORT_EMAIL: "privacy-e2e@example.invalid"
     },
   },
 });

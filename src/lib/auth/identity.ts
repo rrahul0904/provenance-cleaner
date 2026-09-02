@@ -4,8 +4,10 @@ export interface RequestIdentity { userId: string; isAnonymous: boolean; }
 
 export async function getRequestIdentity(): Promise<RequestIdentity | null> {
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
-  const claims = data?.claims as Record<string, unknown> | undefined;
-  if (error || !claims || typeof claims.sub !== "string") return null;
-  return { userId: claims.sub, isAnonymous: claims.is_anonymous === true || claims.is_anonymous === "true" };
+  // getUser performs an authoritative Auth-server lookup. This is intentional for
+  // billable/sensitive API paths so a token for a deleted user does not remain
+  // sufficient merely because its JWT signature and expiry are still valid.
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  return { userId: data.user.id, isAnonymous: Boolean(data.user.is_anonymous) };
 }

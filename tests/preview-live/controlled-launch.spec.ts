@@ -19,7 +19,7 @@ async function fillAcrossFrames(page: Page, selectors: string[], value: string, 
               return true;
             }
           } catch {
-            // The Checkout DOM may replace payment frames while loading; retry.
+            // Stripe Checkout may replace payment frames while loading; retry.
           }
         }
       }
@@ -64,31 +64,28 @@ async function balance(page: Page): Promise<Balance> {
 
 async function assertPreviewIsReachable(page: Page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-
   const appHeading = page.getByRole("heading", { name: /See what your content is carrying/i });
   const vercelLogin = page.getByRole("heading", { name: /Log in to Vercel/i });
-
   const landing = await Promise.race([
     appHeading.waitFor({ state: "visible", timeout: 10_000 }).then(() => "app" as const).catch(() => null),
     vercelLogin.waitFor({ state: "visible", timeout: 10_000 }).then(() => "vercel" as const).catch(() => null),
   ]);
-
   if (landing === "vercel") throw new Error(PREVIEW_AUTH_BLOCKER);
   await expect(appHeading).toBeVisible({ timeout: 30_000 });
 }
 
-test("real Preview: guest → Stripe TEST Checkout → AI commit → release → duplicate operation", async ({ page }) => {
+test("real Preview: guest → Stripe TEST Checkout → Parity commit → release → duplicate operation", async ({ page }) => {
   await assertPreviewIsReachable(page);
 
   const account = page.getByRole("region", { name: "Account and credits" });
-  const startGuest = account.getByRole("button", { name: "Start guest" });
+  const startGuest = account.getByRole("button", { name: /Start guest/i });
   await expect(startGuest).toBeEnabled({ timeout: 30_000 });
   await startGuest.click();
   await expect(account.getByText("Guest session")).toBeVisible();
   await expect(account.getByText(/0 available credits/)).toBeVisible();
   expect(await balance(page)).toEqual({ settled: 0, held: 0, available: 0 });
 
-  const starter = account.getByRole("button", { name: "+10", exact: true });
+  const starter = account.getByRole("button", { name: /\+10\s*·\s*\$4\.99/i });
   await expect(starter).toBeEnabled({ timeout: 30_000 });
   await starter.click();
   await page.waitForURL(/checkout\.stripe\.com\//u, { timeout: 30_000 });
@@ -100,8 +97,8 @@ test("real Preview: guest → Stripe TEST Checkout → AI commit → release →
   await fillAcrossFrames(page, ['input[autocomplete="postal-code"]', 'input[name="billingPostalCode"]', 'input[placeholder*="ZIP"]'], "10001", false);
   await clickSubmitAcrossFrames(page);
 
-  await page.waitForURL(/checkout=success/u, { timeout: 60_000 });
-  await expect(account.getByText(/10 available credits/)).toBeVisible({ timeout: 30_000 });
+  await page.waitForURL(url => url.searchParams.get("checkout") === "success" && Boolean(url.searchParams.get("purchase")), { timeout: 60_000 });
+  await expect(account.getByText(/Payment (received|confirmed)/i)).toBeVisible({ timeout: 30_000 });
   await expect.poll(async () => (await balance(page)).available, { timeout: 30_000 }).toBe(10);
 
   const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
@@ -115,7 +112,7 @@ test("real Preview: guest → Stripe TEST Checkout → AI commit → release →
   page.on("request", capture);
 
   await textarea.fill(FIXTURE);
-  const edit = editor.getByRole("button", { name: /Edit for natural/i });
+  const edit = editor.getByRole("button", { name: /Edit for parity/i });
   await expect(edit).toBeEnabled({ timeout: 30_000 });
   await edit.click();
   await expect(editor.getByText(/1 credit charged/)).toBeVisible({ timeout: 90_000 });

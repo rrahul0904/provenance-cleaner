@@ -1,26 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { creditCostForWords } from "@/lib/product-contract";
+import { CREDIT_PACKS } from "@/lib/billing/catalog";
+import { creditCostForWords, MAX_REWRITE_WORDS } from "@/lib/product-contract";
 
-const PRESETS = [
-  { label: "Short document", words: 1_000 },
-  { label: "Medium paper", words: 5_000 },
-  { label: "Long chapter", words: 10_000 },
+type Operation="text-scan"|"text-clean"|"rewrite"|"file-inspect"|"file-sanitize"|"advanced-inspect";
+const OPERATIONS:{id:Operation;label:string;description:string}[]=[
+{id:"text-scan",label:"Unicode / text scan",description:"Local deterministic inspection."},{id:"text-clean",label:"Text / TXT cleaning",description:"Conservative hidden-character sanitation."},{id:"rewrite",label:"Semantic rewrite",description:"Protected AI editing with preservation validation."},{id:"file-inspect",label:"DOCX / PNG / JPEG inspection",description:"Local metadata and provenance inspection."},{id:"file-sanitize",label:"DOCX / PNG / JPEG sanitation",description:"Server-authoritative metadata cleaning."},{id:"advanced-inspect",label:"PDF / WebP inspection",description:"Inspection-only advanced file path."},
 ];
-
-export function PricingCalculator() {
-  const [words, setWords] = useState(5_000);
-  const credits = useMemo(() => creditCostForWords(words), [words]);
-  const promoCovered = credits <= 5;
-  return <section className="panel" aria-labelledby="pricing-calculator-title">
-    <div className="panel-heading"><div><p className="eyebrow">Credit calculator</p><h2 id="pricing-calculator-title">Estimate a text job</h2></div><span className="pill">{credits} credit{credits === 1 ? "" : "s"}</span></div>
-    <label>
-      <strong>Word count</strong>
-      <input type="number" min={1} max={100_000} step={100} value={words} onChange={event => setWords(Math.max(1, Math.min(100_000, Number(event.target.value) || 1)))} />
-    </label>
-    <input aria-label="Word count slider" type="range" min={500} max={100_000} step={500} value={Math.max(500, words)} onChange={event => setWords(Number(event.target.value))} />
-    <div className="actions">{PRESETS.map(preset => <button type="button" className="ghost" key={preset.label} onClick={() => setWords(preset.words)}>{preset.label}</button>)}</div>
-    <div className="verification-box"><strong>{words.toLocaleString()} words → {credits} credit{credits === 1 ? "" : "s"}</strong><p>Text uses one credit per 1,000 source words, rounded up. {promoCovered ? "The full five-credit first-time allowance could cover this job." : "This job needs more than the five-credit first-time allowance."}</p></div>
-  </section>;
-}
+export function PricingCalculator(){const[operation,setOperation]=useState<Operation>("text-clean");const[words,setWords]=useState(5_000);const isWords=operation==="text-clean"||operation==="rewrite";const credits=useMemo(()=>operation==="text-clean"||operation==="rewrite"?creditCostForWords(words):operation==="file-sanitize"?1:0,[operation,words]);const needsAccount=credits>0;const supported=operation!=="advanced-inspect"||credits===0;const rewriteOver=operation==="rewrite"&&words>MAX_REWRITE_WORDS;const starterUnit=CREDIT_PACKS.starter.priceUsd/CREDIT_PACKS.starter.credits;const referenceValue=credits*starterUnit;const selected=OPERATIONS.find(item=>item.id===operation)!;
+return <section className="panel pricing-calculator" aria-labelledby="pricing-calculator-title"><div className="panel-heading"><div><p className="eyebrow">Credit calculator</p><h2 id="pricing-calculator-title">Estimate the operation before you run it.</h2></div><span className="pill">{credits} credit{credits===1?"":"s"}</span></div><div className="calculator-grid"><label>Operation<select value={operation} onChange={event=>setOperation(event.target.value as Operation)}>{OPERATIONS.map(item=><option value={item.id} key={item.id}>{item.label}</option>)}</select><small>{selected.description}</small></label>{isWords&&<label>Source word count<input type="number" min={1} max={100_000} step={100} value={words} onChange={event=>setWords(Math.max(1,Math.min(100_000,Number(event.target.value)||1)))} /><input aria-label="Word count slider" type="range" min={500} max={100_000} step={500} value={Math.max(500,words)} onChange={event=>setWords(Number(event.target.value))}/></label>}</div>{rewriteOver&&<div className="notice-card">Semantic editing accepts at most {MAX_REWRITE_WORDS.toLocaleString()} words per operation. Split this input before running it.</div>}<div className="estimate-grid"><div><span>Estimated credits</span><strong>{credits}</strong></div><div><span>Reference pack value</span><strong>${referenceValue.toFixed(2)}</strong><small>Based on Starter pack unit value; credits are prepaid, not charged per action.</small></div><div><span>Account needed</span><strong>{needsAccount?"For action":"No"}</strong></div><div><span>Support mode</span><strong>{operation==="advanced-inspect"?"Inspection only":supported?"Supported":"Review"}</strong></div></div><div className="trust-note"><span className="status-dot"/><div><strong>Failed reserved jobs release the hold.</strong><p>Free scans and inspections never debit credits. Billable operations commit only after the corresponding verification contract succeeds.</p></div></div></section>}

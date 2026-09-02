@@ -36,10 +36,10 @@ function statusFromValidation(hasManifest: boolean, validation: C2paValidationIt
   if (validation.length === 0) return "valid";
 
   const codes = validation.map((item) => item.code.toLowerCase());
-  if (codes.some((code) => code.includes("untrusted"))) return "untrusted";
   if (codes.some((code) => ["invalid", "mismatch", "revoked", "expired", "malformed", "tampered"].some((token) => code.includes(token)))) {
     return "invalid";
   }
+  if (codes.some((code) => code.includes("untrusted"))) return "untrusted";
   return "unverifiable";
 }
 

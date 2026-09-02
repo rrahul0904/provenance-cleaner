@@ -36,11 +36,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: test
+          NEXT_PUBLIC_SUPPORT_EMAIL: support@ci.provenance-cleaner.test
           SUPABASE_SECRET_KEY: test
           STRIPE_SECRET_KEY: sk_test_ci_placeholder
           STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
           TURNSTILE_SECRET_KEY: test
           RATE_LIMIT_HASH_SALT: test-test-test-test-test-test
+          PROMO_FINGERPRINT_SECRET: ci-only-placeholder-secret-32-characters-minimum
           CRON_SECRET: test-test-test-test-test-test
           STRIPE_PRICE_STARTER: price_test
           STRIPE_PRICE_PLUS: price_test

@@ -1,77 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect,useMemo,useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { emitReceipt } from "./receipt-drawer";
 
-type Balance = { settled: number; held: number; available: number };
-type LedgerEntry = { id: string; delta: number; kind: string; sourceKey: string; createdAt: string; metadata?: Record<string, unknown> };
-type PurchaseRefund = { credits: number; amount: number; currency: string; createdAt: string };
-type Purchase = { id: string; packId: string; credits: number; status: string; createdAt: string; completedAt?: string | null; refund?: PurchaseRefund | null };
-type History = { balance: Balance; ledger: LedgerEntry[]; purchases: Purchase[] };
-
-export function AccountDashboard() {
-  const supabase = useMemo(() => { try { return createClient(); } catch { return null; } }, []);
-  const [email, setEmail] = useState<string | null>(null);
-  const [anonymous, setAnonymous] = useState(false);
-  const [history, setHistory] = useState<History | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState("");
-  const [refundBusy, setRefundBusy] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (!supabase) { setLoading(false); return; }
-      const { data } = await supabase.auth.getUser();
-      if (cancelled) return;
-      if (!data.user) { window.location.replace("/auth"); return; }
-      setEmail(data.user.email ?? null);
-      setAnonymous(Boolean(data.user.is_anonymous));
-      const response = await fetch("/api/account/history", { cache: "no-store" });
-      if (!cancelled && response.ok) {
-        const payload = await response.json();
-        setHistory(payload.history as History);
-      }
-      if (!cancelled) setLoading(false);
-    }
-    void load();
-    return () => { cancelled = true; };
-  }, [supabase]);
-
-  async function requestRefund(purchaseId: string) {
-    setRefundBusy(purchaseId); setMessage(null);
-    try {
-      const response = await fetch("/api/account/refund", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ purchaseId }) });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error?.message ?? "Refund could not be completed.");
-      setMessage(`Refunded ${payload.creditsRefunded} unused credit${payload.creditsRefunded === 1 ? "" : "s"}. Stripe refund amount: ${(payload.amountRefunded / 100).toFixed(2)} ${String(payload.currency).toUpperCase()}.`);
-      setTimeout(() => window.location.reload(), 900);
-    } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Refund could not be completed."); }
-    finally { setRefundBusy(null); }
-  }
-
-  async function deleteAccount() {
-    if (confirmation !== "DELETE") return;
-    setMessage(null);
-    const response = await fetch("/api/account/delete", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmation }) });
-    const payload = await response.json();
-    if (!response.ok) { setMessage(payload?.error?.message ?? "Account deletion failed."); return; }
-    if (supabase) await supabase.auth.signOut();
-    window.location.replace("/?account=deleted");
-  }
-
-  if (loading) return <div className="panel"><p>Loading account…</p></div>;
-  if (!history) return <div className="panel"><p>Account history is unavailable or you are signed out.</p><a href="/auth">Sign in</a></div>;
-
-  return <div className="stack">
-    <section className="panel"><div className="panel-heading"><div><p className="eyebrow">Account</p><h2>{anonymous ? "Guest account" : email ?? "Account"}</h2></div><span className="pill">{history.balance.available} credits</span></div><div className="metrics"><Metric label="Settled" value={history.balance.settled} /><Metric label="Held" value={history.balance.held} /><Metric label="Available" value={history.balance.available} /></div><p className="privacy-note">History contains operational credit metadata only. Submitted text, transformed prose, file contents and filenames are intentionally excluded.</p>{anonymous && <a href="/auth">Upgrade this guest account</a>}{message && <div className="notice-card">{message}</div>}</section>
-
-    <section className="panel"><p className="eyebrow">Credit history</p><h2>Ledger</h2>{history.ledger.length === 0 ? <div className="empty-state compact">No credit activity yet.</div> : <div className="findings">{history.ledger.map(entry => <article className="finding" key={entry.id}><div><strong>{entry.delta > 0 ? `+${entry.delta}` : entry.delta} · {entry.kind.replaceAll("_", " ")}</strong><p>{new Date(entry.createdAt).toLocaleString()}</p></div><span className={entry.delta > 0 ? "tag-safe" : "tag-review"}>{entry.sourceKey.startsWith("reservation:") ? "usage" : entry.kind}</span></article>)}</div>}</section>
-
-    <section className="panel"><p className="eyebrow">Purchases</p><h2>Checkout history</h2>{history.purchases.length === 0 ? <div className="empty-state compact">No credit-pack purchases yet.</div> : <div className="findings">{history.purchases.map(purchase => <article className="finding" key={purchase.id}><div><strong>{purchase.packId} · {purchase.credits} credits</strong><p>{new Date(purchase.createdAt).toLocaleString()}{purchase.refund ? ` · ${purchase.refund.credits} credits refunded` : ""}</p></div><div className="actions"><span className={purchase.status === "completed" ? "tag-safe" : "tag-review"}>{purchase.refund ? "refunded" : purchase.status}</span>{!anonymous && purchase.status === "completed" && !purchase.refund && <button className="ghost" disabled={refundBusy === purchase.id} onClick={() => void requestRefund(purchase.id)}>{refundBusy === purchase.id ? "Checking…" : "Refund unused ≤30d"}</button>}</div></article>)}</div>}</section>
-
-    <section className="panel"><p className="eyebrow">Danger zone</p><h2>Delete account</h2><p>Deleting the account removes the Supabase identity and cascades its app credit/history rows. Unused credits are lost. A non-reversible keyed email fingerprint may remain solely to prevent repeated signup-credit abuse; payment processors may separately retain legally required transaction records.</p><label>Type DELETE to confirm<input value={confirmation} onChange={event => setConfirmation(event.target.value)} /></label><div className="actions"><button className="secondary" disabled={confirmation !== "DELETE"} onClick={() => void deleteAccount()}>Delete my account</button></div></section>
-  </div>;
-}
-function Metric({ label, value }: { label: string; value: number }) { return <div className="metric"><span>{label}</span><strong>{value}</strong></div>; }
+type Balance={settled:number;held:number;available:number};type LedgerEntry={id:string;delta:number;kind:string;sourceKey:string;createdAt:string};type PurchaseRefund={credits:number;amount:number;currency:string;createdAt:string;reason?:string};type Purchase={id:string;packId:string;credits:number;status:string;createdAt:string;completedAt?:string|null;refund?:PurchaseRefund|null};type Job={id:string;kind:string;credits:number;status:string;sizeBucket:string;createdAt:string;completedAt?:string|null};type History={balance:Balance;ledger:LedgerEntry[];purchases:Purchase[];jobs?:Job[]};type AuditView="all"|"text"|"file"|"rewrite"|"purchases"|"refunds"|"holds";
+const VIEWS:[AuditView,string][]=[["all","All"],["text","Text"],["file","File"],["rewrite","Rewrite"],["purchases","Purchases"],["refunds","Refunds"],["holds","Holds"]];
+function shortId(id:string){return id.length>18?`${id.slice(0,8)}…${id.slice(-6)}`:id;}
+export function AccountDashboard(){const supabase=useMemo(()=>{try{return createClient();}catch{return null;}},[]);const[email,setEmail]=useState<string|null>(null);const[anonymous,setAnonymous]=useState(false);const[history,setHistory]=useState<History|null>(null);const[loading,setLoading]=useState(true);const[message,setMessage]=useState<string|null>(null);const[confirmation,setConfirmation]=useState("");const[refundBusy,setRefundBusy]=useState<string|null>(null);const[view,setView]=useState<AuditView>("all");
+useEffect(()=>{let cancelled=false;async function load(){if(!supabase){setLoading(false);return;}const{data}=await supabase.auth.getUser();if(cancelled)return;if(!data.user){window.location.replace("/auth");return;}setEmail(data.user.email??null);setAnonymous(Boolean(data.user.is_anonymous));const response=await fetch("/api/account/history",{cache:"no-store"});if(!cancelled&&response.ok){const payload=await response.json();setHistory(payload.history as History);}if(!cancelled)setLoading(false);}void load();return()=>{cancelled=true;};},[supabase]);
+async function requestRefund(purchaseId:string){setRefundBusy(purchaseId);setMessage(null);try{const response=await fetch("/api/account/refund",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({purchaseId})});const payload=await response.json();if(!response.ok)throw new Error(payload?.error?.message??"Refund could not be completed.");const refundMessage=`${payload.reconciled?"Refund already reconciled":"Refunded"} ${payload.creditsRefunded} unused credit${payload.creditsRefunded===1?"":"s"}. Stripe refund amount: ${(payload.amountRefunded/100).toFixed(2)} ${String(payload.currency).toUpperCase()}.`;setMessage(refundMessage);emitReceipt({id:purchaseId,title:"Purchase refund receipt",operation:"payment.refund",status:"refunded",creditsReleased:Number(payload.creditsRefunded),verification:payload.reconciled?"Existing Stripe refund and authoritative billing history were reconciled without a second refund.":"Stripe refund completed and unused purchased credits were removed from the authoritative ledger.",details:[{label:"Credits refunded",value:Number(payload.creditsRefunded)},{label:"Amount",value:`${(payload.amountRefunded/100).toFixed(2)} ${String(payload.currency).toUpperCase()}`} ]});setTimeout(()=>window.location.reload(),900);}catch(cause){setMessage(cause instanceof Error?cause.message:"Refund could not be completed.");}finally{setRefundBusy(null);}}
+async function deleteAccount(){if(confirmation!=="DELETE")return;setMessage(null);const response=await fetch("/api/account/delete",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({confirmation})});const payload=await response.json();if(!response.ok){setMessage(payload?.error?.message??"Account deletion failed.");return;}if(supabase)await supabase.auth.signOut();window.location.replace(`/?account=deleted${payload.reconciliationPending?"&reconciliation=pending":""}`);}
+if(loading)return <div className="panel account-loading"><span className="loading-pulse"/><p>Loading account evidence…</p></div>;if(!history)return <div className="panel account-unavailable"><p className="eyebrow">Account unavailable</p><h2>History is unavailable or you are signed out.</h2><p>The account view depends on the authoritative billing-history contract; it does not reconstruct balances in the browser.</p><Link className="primary-link" href="/auth">Sign in</Link></div>;const jobs=history.jobs??[];const visibleJobs=jobs.filter(job=>view==="all"||(view==="text"&&(job.kind==="text"||job.kind==="txt"))||(view==="file"&&["docx","png","jpeg"].includes(job.kind))||(view==="rewrite"&&job.kind==="transform")||(view==="holds"&&job.status==="reserved"));const visiblePurchases=history.purchases.filter(purchase=>view!=="refunds"||Boolean(purchase.refund));const showLedger=view==="all";const showJobs=["all","text","file","rewrite","holds"].includes(view);const showPurchases=["all","purchases","refunds"].includes(view);
+return <div className="account-dashboard"><section className="panel account-overview"><div className="account-identity"><p className="eyebrow">Privacy-first audit center</p><h2>{anonymous?"Guest account":email??"Account"}</h2><p>{anonymous?"This identity can be upgraded without replacing its credit history.":"Signed-in identity with authoritative purchase and job history."}</p></div><div className="account-balance-grid"><Metric label="Available" value={history.balance.available}/><Metric label="Held" value={history.balance.held}/><Metric label="Settled" value={history.balance.settled}/></div><div className="account-overview-actions">{anonymous&&<Link className="primary-link" href="/auth">Upgrade this guest</Link>}<Link className="secondary-link" href="/pricing">Buy credits</Link></div><div className="account-privacy-line"><span className="status-dot"/>History contains operational credit/job metadata only. Submitted text, transformed prose, file contents and filenames are intentionally excluded.</div>{message&&<div className="notice-card account-message">{message}</div>}</section>
+<section className="audit-filter-shell" aria-label="Credit history"><div><p className="eyebrow">Credit history</p><h2>Follow the evidence trail.</h2></div><div className="audit-tabs" role="tablist" aria-label="Account history filters">{VIEWS.map(([id,label])=><button role="tab" aria-selected={view===id} className={view===id?"active":""} key={id} onClick={()=>setView(id)}>{label}</button>)}</div></section>
+{showLedger&&<section className="panel account-section"><div className="account-section-head"><div><span className="mono-label">LEDGER</span><h2>Credit movements</h2></div><span className="pill">{history.ledger.length} entries</span></div>{history.ledger.length===0?<div className="empty-state compact">No credit activity yet.</div>:<div className="audit-list">{history.ledger.map(entry=><article className="audit-row" key={entry.id}><div className={`audit-amount ${entry.delta>0?"positive":"negative"}`}>{entry.delta>0?`+${entry.delta}`:entry.delta}</div><div><strong>{entry.kind.replaceAll("_"," ")}</strong><p>{new Date(entry.createdAt).toLocaleString()}</p></div><code title={entry.sourceKey}>{shortId(entry.sourceKey.startsWith("reservation:")?entry.sourceKey.slice(12):entry.sourceKey)}</code><span className={entry.delta>0?"tag-safe":"tag-review"}>{entry.sourceKey.startsWith("reservation:")?"usage":entry.kind}</span></article>)}</div>}</section>}
+{showJobs&&<section className="panel account-section"><div className="account-section-head"><div><span className="mono-label">OPERATIONS</span><h2>Sanitization jobs</h2></div><span className="pill">privacy-safe history</span></div>{visibleJobs.length===0?<div className="empty-state compact">No matching billable jobs.</div>:<div className="audit-list">{visibleJobs.map(job=><article className="audit-row job-row" key={job.id}><div className="job-glyph">{job.kind==="transform"?"AI":job.kind.toUpperCase().slice(0,3)}</div><div><strong>{job.kind.replaceAll("_"," ")} · {job.credits} credit{job.credits===1?"":"s"}</strong><p>{new Date(job.createdAt).toLocaleString()} · {job.sizeBucket}</p></div><code title={job.id}>{shortId(job.id)}</code><span className={job.status==="committed"?"tag-safe":"tag-review"}>{job.status}</span></article>)}</div>}<p className="privacy-note">Job history excludes submitted text, transformed prose, file contents, and filenames.</p></section>}
+{showPurchases&&<section className="panel account-section"><div className="account-section-head"><div><span className="mono-label">CHECKOUT</span><h2>{view==="refunds"?"Refund history":"Purchases"}</h2></div><span className="pill">Stripe authoritative</span></div>{visiblePurchases.length===0?<div className="empty-state compact">No matching credit-pack purchases.</div>:<div className="audit-list">{visiblePurchases.map(purchase=><article className="audit-row purchase-row" key={purchase.id}><div className="job-glyph">+{purchase.credits}</div><div><strong>{purchase.packId} · {purchase.credits} credits</strong><p>{new Date(purchase.createdAt).toLocaleString()}{purchase.refund?` · ${purchase.refund.credits} credits refunded`:""}</p></div><code title={purchase.id}>{shortId(purchase.id)}</code><div className="purchase-actions"><span className={purchase.status==="completed"?"tag-safe":"tag-review"}>{purchase.refund?"refunded":purchase.status}</span>{!anonymous&&purchase.status==="completed"&&!purchase.refund&&<button className="ghost" disabled={refundBusy===purchase.id} onClick={()=>void requestRefund(purchase.id)}>{refundBusy===purchase.id?"Checking…":"Refund unused ≤30d"}</button>}</div></article>)}</div>}</section>}
+<section className="panel danger-zone"><div><span className="mono-label">DANGER ZONE</span><h2>Delete account</h2><p>Deleting the account removes the Supabase identity and detaches it from retained pseudonymous accounting records. Narrow accounting, payment-reconciliation, and non-reversible promotion-abuse records may remain as described in the privacy policy. Refund eligible purchased credits before deletion.</p></div><div className="danger-action"><label>Type DELETE to confirm<input value={confirmation} onChange={event=>setConfirmation(event.target.value)} autoComplete="off"/></label><button className="danger-button" disabled={confirmation!=="DELETE"} onClick={()=>void deleteAccount()}>Delete my account</button></div></section></div>;}
+function Metric({label,value}:{label:string;value:number}){return <div className="account-metric"><span>{label}</span><strong>{value}</strong></div>;}
