@@ -31,12 +31,14 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
   const present = (name: string) => Boolean(process.env[name]?.trim());
   const stripeKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
   const promoSecret = process.env.PROMO_FINGERPRINT_SECRET?.trim() ?? "";
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ?? "";
   const preview = isVercelPreview();
   const oidc = hasOidc(request);
   const stripeTestKey = stripeKey.startsWith("sk_test_") || stripeKey.startsWith("rk_test_");
   const publicSupabaseConfigured = (present("NEXT_PUBLIC_SUPABASE_URL") || Boolean(DEFAULT_SUPABASE_URL)) && (present("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") || Boolean(DEFAULT_SUPABASE_PUBLISHABLE_KEY));
   const turnstileConfigured = (present("NEXT_PUBLIC_TURNSTILE_SITE_KEY") && present("TURNSTILE_SECRET_KEY")) || preview;
   const stripePricesConfigured = (present("STRIPE_PRICE_STARTER") && present("STRIPE_PRICE_PLUS") && present("STRIPE_PRICE_PRO")) || (stripeTestKey && CONTROLLED_LAUNCH_TEST_PRICE_IDS.every(Boolean));
+  const supportEmailConfigured = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(supportEmail);
   return {
     appUrl: { configured: present("NEXT_PUBLIC_APP_URL") || Boolean(vercelOrigin()), required: true },
     supabasePublic: { configured: publicSupabaseConfigured, required: true },
@@ -45,6 +47,7 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
     turnstile: { configured: turnstileConfigured, required: true },
     rateLimitSalt: { configured: present("RATE_LIMIT_HASH_SALT") || oidc || (preview && Boolean(process.env.VERCEL_DEPLOYMENT_ID)), required: true },
     promoFingerprintSecret: { configured: promoSecret.length >= 32, required: true },
+    supportEmail: { configured: supportEmailConfigured, required: true },
     stripeTestMode: { configured: stripeTestKey && present("STRIPE_WEBHOOK_SECRET") && stripePricesConfigured, required: true },
     cron: { configured: present("CRON_SECRET"), required: !preview },
   };
