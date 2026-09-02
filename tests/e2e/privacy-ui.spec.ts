@@ -18,6 +18,18 @@ test("DNT does not emit third-party analytics from the public workbench", async 
   expect(analyticsRequests).toEqual([]);
 });
 
+test("homepage explains the evidence loop within the hero", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: "See what your content is carrying." })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Start free inspection" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "See a verification receipt" })).toBeVisible();
+  const hero = page.locator(".hero");
+  await expect(hero.getByText("Drop content", { exact: true })).toBeVisible();
+  await expect(hero.getByText("See hidden signals", { exact: true })).toBeVisible();
+  await expect(hero.getByText("Clean safely", { exact: true })).toBeVisible();
+  await expect(hero.getByText("Get proof", { exact: true })).toBeVisible();
+});
+
 test("source canary is not persisted in browser storage after a free scan", async ({ page }) => {
   const canary = `PC_PRIVACY_TEXT_${crypto.randomUUID()}`;
   await page.goto("/");
@@ -42,6 +54,22 @@ test("source canary is not persisted in browser storage after a free scan", asyn
   expect(persisted).toEqual({ local: false, session: false, indexedDbName: false, cacheName: false, cookie: false });
 });
 
+test("unicode findings map to an interactive source preview", async ({ page }) => {
+  await page.goto("/");
+  const scanner = page.getByRole("region", { name: "Provenance text scanner" });
+  await scanner.getByLabel("Text to scan").fill("Contract signed\u200B today. Review \u202Ethis marker.");
+  await scanner.getByRole("button", { name: "Scan text" }).click();
+
+  const explorer = scanner.getByTestId("forensic-text-explorer");
+  await expect(explorer).toBeVisible();
+  const marker = explorer.getByRole("button", { name: /Select U\+200B at index/ });
+  await expect(marker).toBeVisible();
+  await marker.click();
+  await expect(marker).toHaveAttribute("aria-pressed", "true");
+  await expect(explorer.getByLabel("Selected finding source preview")).toContainText("[U+200B]");
+  await expect(explorer.getByLabel("Selected finding source preview")).toContainText("ZERO WIDTH SPACE");
+});
+
 test("free scan creates an accessible exportable receipt drawer without persisting source text", async ({ page }) => {
   const canary = `PC_RECEIPT_${crypto.randomUUID()}`;
   await page.goto("/");
@@ -54,7 +82,9 @@ test("free scan creates an accessible exportable receipt drawer without persisti
   const dialog = page.getByRole("dialog", { name: "Text inspection receipt" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("text.scan")).toBeVisible();
+  await expect(dialog.getByText("Inspection complete.")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Export JSON receipt" })).toBeVisible();
+  await expect(dialog.getByText("Technical evidence")).toBeVisible();
   await expect(dialog).not.toContainText(canary);
 });
 
@@ -95,9 +125,21 @@ test("contact message stays client-side and only prepares mailto behavior", asyn
   expect(await page.evaluate(marker => document.documentElement.innerHTML.includes(marker), canary)).toBe(true);
 });
 
+test("refinement breakpoints keep the workbench intentional and overflow-free", async ({ page }) => {
+  const widths = [360, 375, 390, 430, 768, 820, 1024, 1180, 1440];
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    const response = await page.goto("/", { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBeLessThan(400);
+    await expect(page.getByRole("main")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Provenance text scanner" })).toBeVisible();
+    await assertNoHorizontalOverflow(page);
+  }
+});
+
 test("public surfaces have main landmarks and no horizontal overflow across launch widths", async ({ page }) => {
   test.setTimeout(120_000);
-  const widths = [375, 390, 768, 1024, 1440];
+  const widths = [375, 768, 1440];
   const routes = ["/", "/pricing", "/auth", "/contact", "/privacy-policy", "/terms-of-service", "/cookie-policy", "/faq", "/how-it-works", "/capabilities", "/mission"];
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });

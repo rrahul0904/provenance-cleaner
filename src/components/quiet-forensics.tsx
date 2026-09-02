@@ -1,7 +1,27 @@
 import Link from "next/link";
 
+export function HeroWorkflowStrip() {
+  const steps = [
+    ["01", "Drop content", "Paste text or choose a supported file."],
+    ["02", "See hidden signals", "Locate Unicode, metadata, provenance, or preservation risks."],
+    ["03", "Clean safely", "Remove only what the evidence says is safe, or edit under factual checks."],
+    ["04", "Get proof", "Re-inspect the output and keep a verification receipt."],
+  ];
+
+  return <div className="hero-workflow" aria-label="Provenance Cleaner workflow">
+    {steps.map(([number, title, copy], index) => <div className="hero-workflow-step" key={number}>
+      <span className="hero-workflow-index">{number}</span>
+      <div>
+        <strong>{title}</strong>
+        <small>{copy}</small>
+      </div>
+      {index < steps.length - 1 && <span className="hero-workflow-arrow" aria-hidden="true">→</span>}
+    </div>)}
+  </div>;
+}
+
 export function HeroInspectionVisual() {
-  return <div className="inspection-visual" aria-label="Illustration of document inspection and verification">
+  return <div id="receipt-preview" className="inspection-visual" aria-label="Illustration of document inspection and verification">
     <div className="visual-grid" aria-hidden="true" />
     <div className="document-sheet">
       <div className="document-kicker">DOCUMENT / 01</div>
@@ -13,7 +33,9 @@ export function HeroInspectionVisual() {
     <div className="inspection-lens"><span>INSPECT</span><i/></div>
     <div className="receipt-card">
       <div className="receipt-top"><span className="mono-label">VERIFICATION RECEIPT</span><span className="validated-stamp">VALIDATED</span></div>
+      <div className="receipt-mini-timeline" aria-hidden="true"><span>inspect</span><i/> <span>act</span><i/> <span>verify</span><i/> <strong>receipt</strong></div>
       <dl><div><dt>safe removals</dt><dd>03</dd></div><div><dt>preserved</dt><dd>01</dd></div><div><dt>receipt</dt><dd className="mono-label">9F2A…71C8</dd></div></dl>
+      <p>Verified. Safe findings were removed and the output was re-inspected.</p>
     </div>
   </div>;
 }

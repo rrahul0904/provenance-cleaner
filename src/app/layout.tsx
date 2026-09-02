@@ -3,6 +3,7 @@ import { ReceiptDrawer } from "@/components/receipt-drawer";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import "./globals.css";
 import "./quiet-forensics.css";
+import "./quiet-forensics-refinement.css";
 import "./account-forensics.css";
 
 export const metadata: Metadata = {
