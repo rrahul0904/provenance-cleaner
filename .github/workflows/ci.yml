@@ -36,7 +36,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: test
-          NEXT_PUBLIC_SUPPORT_EMAIL: support@example.invalid
+          NEXT_PUBLIC_SUPPORT_EMAIL: support@ci.provenance-cleaner.test
           SUPABASE_SECRET_KEY: test
           STRIPE_SECRET_KEY: sk_test_ci_placeholder
           STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
