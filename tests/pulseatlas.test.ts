@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { trackInspectionCompleted } from "./pulseatlas";
+import { trackInspectionCompleted } from "@/lib/server/pulseatlas";
 
 afterEach(() => { vi.restoreAllMocks(); delete process.env.PULSEATLAS_ENDPOINT; delete process.env.PULSEATLAS_WRITE_KEY; });
 

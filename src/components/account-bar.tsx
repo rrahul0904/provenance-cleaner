@@ -34,10 +34,12 @@ export function AccountBar() {
 
   useEffect(() => {
     let cancelled = false;
-    void refreshIdentity().catch(() => { if (!cancelled) setMessage("Account status could not be refreshed."); });
+    const kickoff = window.setTimeout(() => {
+      void refreshIdentity().catch(() => { if (!cancelled) setMessage("Account status could not be refreshed."); });
+    }, 0);
     const changed = () => { if (!cancelled) void refreshIdentity(); };
     window.addEventListener("provenance:account-changed", changed);
-    return () => { cancelled = true; window.removeEventListener("provenance:account-changed", changed); };
+    return () => { cancelled = true; window.clearTimeout(kickoff); window.removeEventListener("provenance:account-changed", changed); };
   }, [refreshIdentity]);
 
   function resetChallenge() { setChallengeToken(null); setChallengeReset(value => value + 1); }
