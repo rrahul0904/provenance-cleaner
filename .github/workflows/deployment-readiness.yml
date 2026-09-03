@@ -50,6 +50,7 @@ jobs:
           STRIPE_SUBSCRIPTION_PRICE_PRO: price_test_subscription_pro
           STRIPE_SUBSCRIPTION_PRICE_STUDIO: price_test_subscription_studio
           ADMIN_OWNER_USER_ID: 00000000-0000-4000-8000-000000000001
+      - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run predeploy
         env: *phase7_env
