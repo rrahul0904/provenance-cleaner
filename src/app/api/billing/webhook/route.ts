@@ -7,7 +7,7 @@ import { logEvent } from "@/lib/server/observability";
 export const runtime = "nodejs";
 const MAX_WEBHOOK_BYTES = 1_048_576;
 function purchaseId(session: Stripe.Checkout.Session) { return session.metadata?.purchase_id || session.client_reference_id || null; }
-function checkoutCountry(session: Stripe.Checkout.Session) { return session.shipping_details?.address?.country ?? session.customer_details?.address?.country ?? null; }
+function checkoutCountry(session: Stripe.Checkout.Session) { return session.collected_information?.shipping_details?.address?.country ?? session.customer_details?.address?.country ?? null; }
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/billing/webhook");

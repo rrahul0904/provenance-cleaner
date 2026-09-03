@@ -10,6 +10,7 @@ function pngWith(type: string, data: Uint8Array) { return Buffer.concat([Buffer.
 async function open(page: import("@playwright/test").Page) { await page.goto("/"); await expect(page.getByRole("heading", { name: /See what your content is carrying/i })).toBeVisible(); }
 
 test("local Unicode scan and conservative clean remain available", async ({ page }) => {
+  await page.route("**/api/auth/anonymous", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ userId: "00000000-0000-4000-8000-000000000011", isAnonymous: true, balance: { settled: 2, held: 0, available: 2 }, guestPromoGranted: true, requestId: "clean-e2e" }) }));
   await open(page);
   const scanner = page.getByRole("region", { name: "Provenance text scanner" });
   await scanner.getByLabel("Text to scan").fill("Hello\u200B world");
@@ -67,7 +68,7 @@ test("guest UX and Checkout do not mutate credits client-side", async ({ page })
   await account.getByRole("button", { name: "Start guest" }).click();
   await expect(account.getByText("Guest session")).toBeVisible();
   await expect(account.getByText(/5 available credits/)).toBeVisible();
-  await account.getByRole("button", { name: "+10", exact: true }).click();
+  await account.getByRole("button", { name: /^\+10\b/ }).click();
   await expect(account.getByText("Checkout is not available.")).toBeVisible();
   await expect(account.getByText(/5 available credits/)).toBeVisible();
 });
