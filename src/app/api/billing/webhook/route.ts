@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
-import { completeCheckoutPurchase, expireCheckoutPurchase, recordPolicyRefund } from "@/lib/billing/server";
+import { completeCheckoutPurchase, expireCheckoutPurchase, grantSubscriptionInvoice, linkStripeCustomer, recordPolicyRefund, upsertSubscription } from "@/lib/billing/server";
+import { subscriptionPlanFromPrice } from "@/lib/billing/subscriptions";
 import { getStripe } from "@/lib/billing/stripe";
 import { apiError, apiOk, requestContext } from "@/lib/server/api";
 import { logEvent } from "@/lib/server/observability";
@@ -9,6 +10,23 @@ const MAX_WEBHOOK_BYTES=1_048_576;
 function purchaseId(session:Stripe.Checkout.Session){return session.metadata?.purchase_id||session.client_reference_id||null;}
 function checkoutCountry(session:Stripe.Checkout.Session){return session.collected_information?.shipping_details?.address?.country??session.customer_details?.address?.country??null;}
 function object(value:unknown){return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};}
+function stripeId(value: string | { id: string } | null | undefined){return typeof value === "string" ? value : value?.id ?? null;}
+function unixDate(value: number | null | undefined){return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1_000).toISOString() : null;}
+function subscriptionPriceId(subscription: Stripe.Subscription){const first=subscription.items.data[0];return first?.price?.id??null;}
+async function reconcileSubscription(event:Stripe.Event, subscription:Stripe.Subscription){
+  const userId=subscription.metadata?.user_id;
+  const customerId=stripeId(subscription.customer);const priceId=subscriptionPriceId(subscription);const planId=subscriptionPlanFromPrice(priceId);
+  if(!userId||!customerId||!priceId||!planId)return;
+  const credits={plus_monthly:30,pro_monthly:120,studio_monthly:300}[planId];
+  const item=subscription.items.data[0];
+  await upsertSubscription({eventId:event.id,eventType:event.type,userId,customerId,subscriptionId:subscription.id,priceId,planId,status:subscription.status,periodStart:unixDate(item?.current_period_start),periodEnd:unixDate(item?.current_period_end),cancelAtPeriodEnd:subscription.cancel_at_period_end,credits});
+}
+async function reconcileSubscriptionInvoice(event:Stripe.Event, invoice:Stripe.Invoice){
+  const customerId=stripeId(invoice.customer);const subscriptionId=stripeId(invoice.parent?.subscription_details?.subscription ?? null);
+  if(!customerId||!subscriptionId||!invoice.id)return;
+  const line=invoice.lines.data[0];
+  await grantSubscriptionInvoice({eventId:event.id,eventType:event.type,invoiceId:invoice.id,customerId,subscriptionId,periodStart:unixDate(line?.period?.start),periodEnd:unixDate(line?.period?.end)});
+}
 
 async function ensurePaymentDetails(session:Stripe.Checkout.Session){
   if(session.amount_total&&session.currency&&session.payment_intent)return session;
@@ -34,6 +52,10 @@ export async function POST(request:Request){
   try{
     if(event.type==="checkout.session.completed"||event.type==="checkout.session.async_payment_succeeded"){
       const session=event.data.object as Stripe.Checkout.Session;const id=purchaseId(session);const country=checkoutCountry(session);
+      if(session.mode==="subscription"&&event.type==="checkout.session.completed"){
+        const userId=session.metadata?.user_id??session.client_reference_id;const customerId=stripeId(session.customer);
+        if(userId&&customerId)await linkStripeCustomer(userId,customerId);
+      }
       if(id&&session.payment_status==="paid"){
         if(country!=="US"){
           const refund=await fullPolicyRefund(event,session,id,"country_policy");
@@ -50,6 +72,12 @@ export async function POST(request:Request){
       }
     }else if(event.type==="checkout.session.expired"){
       const session=event.data.object as Stripe.Checkout.Session;const id=purchaseId(session);if(id)await expireCheckoutPurchase(event.id,id,session.id);
+    }else if(event.type==="customer.subscription.created"||event.type==="customer.subscription.updated"||event.type==="customer.subscription.deleted"){
+      await reconcileSubscription(event,event.data.object as Stripe.Subscription);
+    }else if(event.type==="invoice.paid"){
+      await reconcileSubscriptionInvoice(event,event.data.object as Stripe.Invoice);
+    }else if(event.type==="invoice.payment_failed"){
+      logEvent("subscription_payment_failed",{requestId:context.requestId,stripeEventId:event.id,eventType:event.type});
     }
   }catch{logEvent("webhook_reconciliation_failed",{requestId:context.requestId,stripeEventId:event.id,eventType:event.type});return apiError(context,"webhook_reconciliation_failed","Webhook could not be reconciled.",500);}
   return apiOk(context,{received:true});

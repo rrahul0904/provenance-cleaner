@@ -1,0 +1,51 @@
+name: deploy-production
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact certified Git SHA to deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+      - name: Refuse a different SHA
+        run: test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+      - run: npm ci --no-audit --no-fund
+      - run: npm i -g vercel@59.10.0
+      - name: Pull Production configuration
+        run: vercel env pull .env.local --yes --environment=production --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run release:check
+      - run: npm run test:e2e
+      - run: npm run predeploy
+      - name: Build exact Production artifact
+        run: vercel build --prod --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      - name: Deploy exact prebuilt artifact
+        run: vercel deploy --prebuilt --prod --yes --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

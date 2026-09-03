@@ -38,6 +38,8 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
   const stripeKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
   const promoSecret = process.env.PROMO_FINGERPRINT_SECRET?.trim() ?? "";
   const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ?? "";
+  const subscriptionPricesConfigured = ["STRIPE_SUBSCRIPTION_PRICE_PLUS", "STRIPE_SUBSCRIPTION_PRICE_PRO", "STRIPE_SUBSCRIPTION_PRICE_STUDIO"].every((name) => /^price_/u.test(process.env[name]?.trim() ?? ""));
+  const adminOwnerConfigured = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(process.env.ADMIN_OWNER_USER_ID?.trim() ?? "");
   const preview = isVercelPreview();
   const oidc = hasOidc(request);
   const stripeTestKey = stripeKey.startsWith("sk_test_") || stripeKey.startsWith("rk_test_");
@@ -55,6 +57,8 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
     promoFingerprintSecret: { configured: promoSecret.length >= 32, required: true },
     supportEmail: { configured: supportEmailConfigured, required: true },
     stripeTestMode: { configured: stripeTestKey && present("STRIPE_WEBHOOK_SECRET") && stripePricesConfigured, required: true },
+    subscriptionCatalog: { configured: subscriptionPricesConfigured, required: true },
+    adminOwner: { configured: adminOwnerConfigured, required: true },
     cron: { configured: present("CRON_SECRET"), required: !preview },
   };
 }

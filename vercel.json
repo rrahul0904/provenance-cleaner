@@ -1,5 +1,7 @@
 {
+  "git": { "deploymentEnabled": false },
   "crons": [
-    { "path": "/api/internal/reconcile", "schedule": "17 4 * * *" }
+    { "path": "/api/internal/reconcile", "schedule": "17 4 * * *" },
+    { "path": "/api/internal/ops-rollup", "schedule": "31 4 * * *" }
   ]
 }

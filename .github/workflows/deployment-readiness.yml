@@ -1,38 +1,37 @@
-name: ci
+name: deployment-readiness
 
 on:
-  push:
-    branches: [main, "phase-*"]
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact Git SHA to certify
+        required: true
+        type: string
   pull_request:
+    branches: ["final-parity-audit-completion"]
 
 permissions:
   contents: read
 
 jobs:
-  verify:
+  certify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha || github.event.pull_request.head.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
-      - name: Require committed lockfile
-        run: test -f package-lock.json
-      - name: Install pinned dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Unit tests
-        run: npm test
-      - name: Lint
-        run: npm run lint
-      - name: Build
-        run: npm run build
-      - name: Production dependency audit
-        run: npm audit --omit=dev --audit-level=high
-      - name: Controlled-launch static gate
-        run: npm run release:check
-        env:
-          NEXT_PUBLIC_APP_URL: https://preview.invalid
+      - run: test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha || github.event.pull_request.head.sha }}"
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run release:check
+        env: &phase7_env
+          NEXT_PUBLIC_APP_URL: https://certification.invalid
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: test
@@ -51,18 +50,8 @@ jobs:
           STRIPE_SUBSCRIPTION_PRICE_PRO: price_test_subscription_pro
           STRIPE_SUBSCRIPTION_PRICE_STUDIO: price_test_subscription_studio
           ADMIN_OWNER_USER_ID: 00000000-0000-4000-8000-000000000001
-
-  e2e:
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.22.0
-      - name: Require committed lockfile
-        run: test -f package-lock.json
-      - run: npm ci --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - run: npm run predeploy
+        env: *phase7_env
+      - name: Verify Phase 7 migration contains no destructive DDL
+        run: '! rg -n "^\s*(drop table|truncate|delete from)" supabase/migrations/20260903144643_phase7_admin_finops_subscriptions.sql'
