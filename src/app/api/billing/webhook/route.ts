@@ -7,7 +7,7 @@ import { logEvent } from "@/lib/server/observability";
 
 export const runtime="nodejs";
 const MAX_WEBHOOK_BYTES=1_048_576;
-function purchaseId(session:Stripe.Checkout.Session){return session.metadata?.purchase_id||session.client_reference_id||null;}
+function purchaseId(session:Stripe.Checkout.Session){return session.mode==="payment"?(session.metadata?.purchase_id||session.client_reference_id||null):null;}
 function checkoutCountry(session:Stripe.Checkout.Session){return session.collected_information?.shipping_details?.address?.country??session.customer_details?.address?.country??null;}
 function object(value:unknown){return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};}
 function stripeId(value: string | { id: string } | null | undefined){return typeof value === "string" ? value : value?.id ?? null;}
@@ -51,11 +51,14 @@ export async function POST(request:Request){
   try{const rawBody=await request.text();if(new TextEncoder().encode(rawBody).byteLength>MAX_WEBHOOK_BYTES)return apiError(context,"payload_too_large","Webhook payload is too large.",413);event=getStripe().webhooks.constructEvent(rawBody,signature,webhookSecret);}catch{logEvent("webhook_rejected",{requestId:context.requestId,reason:"signature_or_payload"});return apiError(context,"invalid_webhook_signature","Invalid webhook signature.",400);}
   try{
     if(event.type==="checkout.session.completed"||event.type==="checkout.session.async_payment_succeeded"){
-      const session=event.data.object as Stripe.Checkout.Session;const id=purchaseId(session);const country=checkoutCountry(session);
-      if(session.mode==="subscription"&&event.type==="checkout.session.completed"){
+      const session=event.data.object as Stripe.Checkout.Session;
+      if(session.mode==="subscription"){
         const userId=session.metadata?.user_id??session.client_reference_id;const customerId=stripeId(session.customer);
-        if(userId&&customerId)await linkStripeCustomer(userId,customerId);
+        if(event.type==="checkout.session.completed"&&userId&&customerId)await linkStripeCustomer(userId,customerId);
+        logEvent("subscription_checkout_completed",{requestId:context.requestId,stripeEventId:event.id,userIdHash:userId?String(userId).slice(0,8):"unknown",customerLinked:Boolean(userId&&customerId)});
+        return apiOk(context,{received:true,subscription:true});
       }
+      const id=purchaseId(session);const country=checkoutCountry(session);
       if(id&&session.payment_status==="paid"){
         if(country!=="US"){
           const refund=await fullPolicyRefund(event,session,id,"country_policy");
