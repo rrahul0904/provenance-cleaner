@@ -8,7 +8,7 @@ on:
         required: true
         type: string
   pull_request:
-    branches: ["final-parity-audit-completion"]
+    branches: [main]
 
 permissions:
   contents: read
