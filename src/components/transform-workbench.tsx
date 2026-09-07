@@ -173,6 +173,7 @@ export function TransformWorkbench() {
             type="button"
             className={`mode-button ${mode === item.id ? "active" : ""}`}
             aria-pressed={mode === item.id}
+            disabled={busy}
             onClick={() => {
               if (mode !== item.id) invalidateResult();
               setMode(item.id);
@@ -184,6 +185,7 @@ export function TransformWorkbench() {
         <textarea
           value={text}
           maxLength={250_000}
+          disabled={busy}
           aria-label="Source text for protected semantic editing"
           placeholder="Paste prose you want to edit…"
           onChange={(event) => {
