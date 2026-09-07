@@ -35,7 +35,7 @@ export type Database = {
       ops_get_admin_role: { Args: { p_user_id: string }; Returns: Json };
       billing_get_stripe_customer: { Args: { p_user_id: string }; Returns: Json };
       billing_get_account_subscription: { Args: { p_user_id: string }; Returns: Json };
-      ops_admin_dashboard: { Args: { p_days?: number }; Returns: Json };
+      ops_admin_status: { Args: Record<PropertyKey, never>; Returns: Json };\n      ops_admin_dashboard: { Args: { p_days?: number }; Returns: Json };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
