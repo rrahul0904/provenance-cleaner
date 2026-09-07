@@ -15,7 +15,7 @@ describe("Phase 8 subscription release regressions", () => {
   });
 
   it("never treats a subscription Checkout session as a credit-pack purchase", () => {
-    expect(webhook).toContain('session.mode==="payment"');
+    expect(webhook).toContain('session.mode==="subscription"?null');
     expect(webhook).toContain('if(session.mode==="subscription")');
     expect(webhook).toContain('return apiOk(context,{received:true,subscription:true})');
   });
