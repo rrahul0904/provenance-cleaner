@@ -1,6 +1,8 @@
 name: deploy-production
 
 on:
+  push:
+    branches: [production-release]
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -19,10 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ inputs.expected_sha || github.sha }}
           fetch-depth: 0
       - name: Refuse a different SHA
-        run: test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha }}"
+        run: test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha || github.sha }}"
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
