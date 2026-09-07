@@ -29,7 +29,8 @@ export type Database = {
       billing_reserve_credits: { Args: { p_credits: number; p_credits_per_24h: number; p_operation_key: string; p_requests_per_minute: number; p_ttl_minutes: number; p_user_id: string }; Returns: Json };
       billing_link_stripe_customer: { Args: { p_customer_id: string; p_user_id: string }; Returns: Json };
       billing_upsert_subscription: { Args: { p_cancel_at_period_end: boolean; p_credits: number; p_customer_id: string; p_event_id: string; p_event_type: string; p_period_end: string | null; p_period_start: string | null; p_plan_id: string; p_price_id: string; p_status: string; p_subscription_id: string; p_user_id: string }; Returns: Json };
-      billing_grant_subscription_invoice: { Args: { p_customer_id: string; p_event_id: string; p_event_type: string; p_invoice_id: string; p_period_end: string | null; p_period_start: string | null; p_subscription_id: string }; Returns: Json };
+      billing_grant_subscription_invoice: { Args: { p_credits: number; p_customer_id: string; p_event_id: string; p_event_type: string; p_invoice_id: string; p_period_end: string | null; p_period_start: string | null; p_plan_id: string; p_price_id: string; p_quantity: number; p_subscription_id: string }; Returns: Json };
+      billing_mark_account_subscriptions_canceled: { Args: { p_user_id: string }; Returns: Json };
       ops_rollup_daily_metrics: { Args: { p_date: string; p_request_id: string }; Returns: Json };
       ops_bootstrap_owner: { Args: { p_owner_id: string }; Returns: Json };
       ops_get_admin_role: { Args: { p_user_id: string }; Returns: Json };
