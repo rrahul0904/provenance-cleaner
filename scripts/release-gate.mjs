@@ -44,9 +44,11 @@ if (existsSync(phase7Migration)) {
 const readinessPath = "src/app/api/readiness/route.ts";
 if (existsSync(readinessPath)) {
   const readiness = readFileSync(readinessPath, "utf8");
-  add("Readiness requires final Phase 6", readiness.includes('REQUIRED_PHASE6_SCHEMA = "20260902034500"'), "exact database schema required");
+  add("Readiness requires final Phase 6", readiness.includes('REQUIRED_PHASE6_SCHEMA = "20260902034500"'), "exact Phase 6 schema required");
+  add("Readiness requires final Phase 7", readiness.includes('REQUIRED_PHASE7_SCHEMA = "20260903144643"') && readiness.includes("phase7Schema"), "exact Phase 7 schema required");
 } else {
   add("Readiness requires final Phase 6", false, "readiness route missing");
+  add("Readiness requires final Phase 7", false, "readiness route missing");
 }
 
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name} — ${item.detail}`);
