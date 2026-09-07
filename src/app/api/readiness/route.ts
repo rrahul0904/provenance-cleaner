@@ -26,13 +26,22 @@ export async function GET(request: Request) {
   } catch { phase7 = null; }
   const phase7Ready = phase7?.schemaVersion === REQUIRED_PHASE7_SCHEMA;
 
+  let adminStatus: Record<string, unknown> | null = null;
+  try {
+    const { data, error } = await createAdminClient().rpc("ops_admin_status");
+    if (!error) adminStatus = record(data);
+  } catch { adminStatus = null; }
+  const adminOwnerReady = adminStatus?.ownerConfigured === true;
+
   const checks = {
     ...env.checks,
+    adminOwner: { configured: adminOwnerReady, required: true },
     phase6Schema: { configured: phase6Ready, required: true },
     phase7Schema: { configured: phase7Ready, required: true },
   };
   const missing = [
     ...env.missing,
+    ...(adminOwnerReady ? [] : ["adminOwner"]),
     ...(phase6Ready ? [] : ["phase6Schema"]),
     ...(phase7Ready ? [] : ["phase7Schema"]),
   ];
@@ -53,5 +62,9 @@ export async function GET(request: Request) {
       ready: phase7Ready,
       schemaVersion: phase7.schemaVersion,
     } : null,
+    admin: {
+      ready: adminOwnerReady,
+      ownerConfigured: adminOwnerReady,
+    },
   }, ready ? 200 : 503, { "cache-control": "no-store" });
 }
