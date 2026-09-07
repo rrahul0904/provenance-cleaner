@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SUBSCRIPTION_PLANS, type SubscriptionPlanId } from "@/lib/billing/subscriptions";
 import { TurnstileWidget } from "@/components/turnstile-widget";
 
@@ -15,6 +16,7 @@ function messageFrom(payload: unknown, fallback: string) {
 }
 
 export function SubscriptionPlanGrid() {
+  const router = useRouter();
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const [busyPlan, setBusyPlan] = useState<SubscriptionPlanId | null>(null);
@@ -33,7 +35,7 @@ export function SubscriptionPlanGrid() {
       });
       const payload = await response.json();
       if (response.status === 401) {
-        window.location.assign("/auth");
+        router.push("/auth");
         return;
       }
       if (!response.ok || typeof payload?.url !== "string") {
