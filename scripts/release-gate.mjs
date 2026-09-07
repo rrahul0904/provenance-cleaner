@@ -11,14 +11,17 @@ add("Node >= 22.22", (() => {
 add("package-lock.json committed", existsSync("package-lock.json"), existsSync("package-lock.json") ? "present" : "missing");
 
 const requiredClient = ["NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "NEXT_PUBLIC_TURNSTILE_SITE_KEY", "NEXT_PUBLIC_SUPPORT_EMAIL"];
-const requiredServer = ["SUPABASE_SECRET_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "TURNSTILE_SECRET_KEY", "RATE_LIMIT_HASH_SALT", "PROMO_FINGERPRINT_SECRET", "CRON_SECRET", "STRIPE_PRICE_STARTER", "STRIPE_PRICE_PLUS", "STRIPE_PRICE_PRO", "STRIPE_SUBSCRIPTION_PRICE_PLUS", "STRIPE_SUBSCRIPTION_PRICE_PRO", "STRIPE_SUBSCRIPTION_PRICE_STUDIO", "ADMIN_OWNER_USER_ID"];
+const requiredServer = ["SUPABASE_SECRET_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "TURNSTILE_SECRET_KEY", "RATE_LIMIT_HASH_SALT", "PROMO_FINGERPRINT_SECRET", "CRON_SECRET", "STRIPE_PRICE_STARTER", "STRIPE_PRICE_PLUS", "STRIPE_PRICE_PRO"];
 for (const name of [...requiredClient, ...requiredServer]) add(`env:${name}`, Boolean(process.env[name]), process.env[name] ? "configured" : "missing");
 add("PROMO_FINGERPRINT_SECRET length", (process.env.PROMO_FINGERPRINT_SECRET?.length ?? 0) >= 32, process.env.PROMO_FINGERPRINT_SECRET ? "configured" : "missing");
 const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ?? "";
 const supportEmailConfigured = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(supportEmail) && !/(^|@)(example\.(com|invalid|org)|invalid|localhost)$|placeholder/iu.test(supportEmail);
 add("Production support email", supportEmailConfigured, supportEmail ? "configured" : "missing");
-for (const name of ["STRIPE_SUBSCRIPTION_PRICE_PLUS", "STRIPE_SUBSCRIPTION_PRICE_PRO", "STRIPE_SUBSCRIPTION_PRICE_STUDIO"]) add(`Stripe TEST subscription price:${name}`, /^price_/u.test(process.env[name] ?? ""), process.env[name] ? "configured" : "missing");
-add("Admin owner UUID", /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(process.env.ADMIN_OWNER_USER_ID ?? ""), process.env.ADMIN_OWNER_USER_ID ? "configured" : "missing");
+const subscriptionCatalogPath = "src/lib/billing/subscriptions.ts";
+const subscriptionCatalog = existsSync(subscriptionCatalogPath) ? readFileSync(subscriptionCatalogPath, "utf8") : "";
+add("Stripe TEST subscription catalog", ["price_1UBmgJRB8OGmEnBwoUtRmBKb","price_1UBmhIRB8OGmEnBwFEJNV4zF","price_1UBmiARB8OGmEnBwgoMzZqbw"].every(id => subscriptionCatalog.includes(id)), "controlled TEST fallback catalog committed");
+const optionalOwner = process.env.ADMIN_OWNER_USER_ID?.trim() ?? "";
+add("Admin bootstrap UUID if supplied", !optionalOwner || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(optionalOwner), optionalOwner ? "configured" : "database owner is authoritative");
 
 if (process.env.STRIPE_SECRET_KEY) add("Stripe test mode", process.env.STRIPE_SECRET_KEY.startsWith("sk_test_") || process.env.STRIPE_SECRET_KEY.startsWith("rk_test_"), "live keys are forbidden during controlled launch");
 if (process.env.NEXT_PUBLIC_APP_URL) add("HTTPS app URL", /^https:\/\//.test(process.env.NEXT_PUBLIC_APP_URL), process.env.NEXT_PUBLIC_APP_URL);
