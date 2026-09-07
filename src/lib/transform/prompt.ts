@@ -1,6 +1,7 @@
 import type { TransformMode } from "./types";
 
 const MODE_GUIDANCE: Record<TransformMode, string> = {
+  parity: "Rewrite the unprotected prose substantially while preserving the same meaning and approximately the same length. Avoid carrying over runs of four or more consecutive source words outside immutable protected spans.",
   natural: "Improve flow, rhythm, and readability while preserving the writer's apparent voice and all substantive meaning.",
   clarity: "Make the prose clearer and better structured. Resolve awkward wording without adding explanations or new claims.",
   concise: "Reduce repetition and unnecessary wording while preserving every factual claim, qualification, and important nuance.",

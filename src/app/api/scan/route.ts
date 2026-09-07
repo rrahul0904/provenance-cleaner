@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const receipt = scanText(parsed.text);
     const sanitation = parsed.sanitize === "none" ? null : sanitizeText(parsed.text, parsed.sanitize);
     logEvent("scan_request", { requestId: context.requestId, sourceChars: parsed.text.length, findings: receipt.summary.total, sanitizeMode: parsed.sanitize });
-    // Content-blind and fail-open: never send parsed.text, receipt details, or sanitation output.
+    // Content-blind and fail-open: raw text, receipts, and sanitation output never leave this boundary.
     void trackInspectionCompleted({ fileType: "text", operation: parsed.sanitize === "none" ? "inspect" : "inspect_and_sanitize", result: "success" });
     return apiOk(context, { receipt, sanitation });
   } catch (error) {

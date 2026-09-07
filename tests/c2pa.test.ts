@@ -40,6 +40,15 @@ describe("C2PA manifest normalization", () => {
     expect(receipt.status).toBe("invalid");
   });
 
+  it("lets cryptographic invalidity outrank an untrusted signer", () => {
+    const receipt = normalizeManifestStore({
+      active_manifest: "urn:manifest:1",
+      manifests: { "urn:manifest:1": { validation_status: [{ code: "signingCredential.untrusted" }] } },
+      validation_status: [{ code: "claimSignature.mismatch" }],
+    }, checkedAt);
+    expect(receipt.status).toBe("invalid");
+  });
+
   it("keeps unknown validation states explicitly unverifiable", () => {
     const receipt = normalizeManifestStore({
       active_manifest: "urn:manifest:1",

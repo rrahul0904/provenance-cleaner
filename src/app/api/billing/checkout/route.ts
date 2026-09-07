@@ -10,48 +10,6 @@ import { publicAppOrigin } from "@/lib/server/env";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
 import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
 
-export const runtime = "nodejs";
-const schema = z.object({ packId: z.enum(["starter", "plus", "pro"]), challengeToken: z.string().max(2048).optional() });
-
-export async function POST(request: Request) {
-  const context = requestContext(request, "/api/billing/checkout");
-  try {
-    const identity = await getRequestIdentity();
-    if (!identity) return apiError(context, "auth_required", "Start a guest session or sign in before buying credits.", 401);
-    const subject = requestSubjectKey(request, identity.userId);
-    const limit = consumeRateLimit("checkout", subject, configuredLimit("RATE_LIMIT_CHECKOUT_PER_MINUTE", 4), 60_000);
-    if (!limit.allowed) {
-      logEvent("rate_limit_triggered", { requestId: context.requestId, route: context.route, userIdHash: subject });
-      return apiError(context, "rate_limited", "Too many checkout requests. Try again shortly.", 429, retryAfter(limit.retryAfterSeconds));
-    }
-    const parsed = await parseJson(request, schema, 4_096);
-    const challenge = await verifyTurnstile(parsed.challengeToken, "account");
-    if (!challenge.ok) {
-      logEvent("bot_challenge_failed", { requestId: context.requestId, route: context.route, userIdHash: subject, reason: challenge.reason ?? "unknown" });
-      return apiError(context, challenge.reason === "not_configured" ? "bot_protection_unavailable" : "bot_challenge_failed", challenge.reason === "not_configured" ? "Bot protection is not configured." : "Bot verification is required.", challenge.reason === "not_configured" ? 503 : 403);
-    }
-    const pack = getServerCreditPack(parsed.packId);
-    const purchaseId = crypto.randomUUID();
-    await createPendingPurchase({ purchaseId, userId: identity.userId, packId: pack.id, credits: pack.credits, priceId: pack.priceId });
-    const origin = publicAppOrigin(request);
-    const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: [{ price: pack.priceId, quantity: 1 }],
-      billing_address_collection: "required",
-      shipping_address_collection: { allowed_countries: ["US"] },
-      client_reference_id: purchaseId,
-      metadata: { purchase_id: purchaseId, pack_id: pack.id },
-      success_url: `${origin}/?checkout=success`,
-      cancel_url: `${origin}/?checkout=cancelled`,
-    }, { idempotencyKey: `credit-purchase:${purchaseId}` });
-    if (!session.url) throw new Error("missing_checkout_url");
-    await attachCheckoutSession(purchaseId, identity.userId, session.id);
-    logEvent("checkout_created", { requestId: context.requestId, userIdHash: subject, purchaseId, packId: pack.id, credits: pack.credits, countryPolicy: "US", latencyMs: Date.now() - context.startedAt });
-    return apiOk(context, { url: session.url, pack: CREDIT_PACKS[parsed.packId] });
-  } catch (error) {
-    if (error instanceof ApiRequestError) return apiError(context, error.code, error.message, error.status);
-    logEvent("checkout_failed", { requestId: context.requestId, route: context.route, status: "backend_error" });
-    return apiError(context, "checkout_unavailable", "Checkout is not available.", 503);
-  }
-}
+export const runtime="nodejs";
+const schema=z.object({packId:z.enum(["starter","plus","pro"]),challengeToken:z.string().max(2048).optional()});
+export async function POST(request:Request){const context=requestContext(request,"/api/billing/checkout");try{const identity=await getRequestIdentity();if(!identity)return apiError(context,"auth_required","Start a guest session or sign in before buying credits.",401);const subject=requestSubjectKey(request,identity.userId);const limit=consumeRateLimit("checkout",subject,configuredLimit("RATE_LIMIT_CHECKOUT_PER_MINUTE",4),60_000);if(!limit.allowed){logEvent("rate_limit_triggered",{requestId:context.requestId,route:context.route,userIdHash:subject});return apiError(context,"rate_limited","Too many checkout requests. Try again shortly.",429,retryAfter(limit.retryAfterSeconds));}const parsed=await parseJson(request,schema,4_096);const challenge=await verifyTurnstile(parsed.challengeToken,"account");if(!challenge.ok){logEvent("bot_challenge_failed",{requestId:context.requestId,route:context.route,userIdHash:subject,reason:challenge.reason??"unknown"});return apiError(context,challenge.reason==="not_configured"?"bot_protection_unavailable":"bot_challenge_failed",challenge.reason==="not_configured"?"Bot protection is not configured.":"Bot verification is required.",challenge.reason==="not_configured"?503:403);}const pack=getServerCreditPack(parsed.packId);const purchaseId=crypto.randomUUID();await createPendingPurchase({purchaseId,userId:identity.userId,packId:pack.id,credits:pack.credits,priceId:pack.priceId});const origin=publicAppOrigin(request);const stripe=getStripe();const session=await stripe.checkout.sessions.create({mode:"payment",line_items:[{price:pack.priceId,quantity:1}],billing_address_collection:"required",shipping_address_collection:{allowed_countries:["US"]},client_reference_id:purchaseId,metadata:{purchase_id:purchaseId,pack_id:pack.id},success_url:`${origin}/?checkout=success&purchase=${purchaseId}`,cancel_url:`${origin}/?checkout=cancelled`},{idempotencyKey:`credit-purchase:${purchaseId}`});if(!session.url)throw new Error("missing_checkout_url");await attachCheckoutSession(purchaseId,identity.userId,session.id);logEvent("checkout_created",{requestId:context.requestId,userIdHash:subject,purchaseId,packId:pack.id,credits:pack.credits,countryPolicy:"US",latencyMs:Date.now()-context.startedAt});return apiOk(context,{url:session.url,pack:CREDIT_PACKS[parsed.packId]});}catch(error){if(error instanceof ApiRequestError)return apiError(context,error.code,error.message,error.status);logEvent("checkout_failed",{requestId:context.requestId,route:context.route,status:"backend_error"});return apiError(context,"checkout_unavailable","Checkout is not available.",503);}}

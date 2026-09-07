@@ -35,3 +35,7 @@ jobs:
           STRIPE_PRICE_STARTER: price_test
           STRIPE_PRICE_PLUS: price_test
           STRIPE_PRICE_PRO: price_test
+          STRIPE_SUBSCRIPTION_PRICE_PLUS: price_test_subscription_plus
+          STRIPE_SUBSCRIPTION_PRICE_PRO: price_test_subscription_pro
+          STRIPE_SUBSCRIPTION_PRICE_STUDIO: price_test_subscription_studio
+          ADMIN_OWNER_USER_ID: 00000000-0000-4000-8000-000000000001

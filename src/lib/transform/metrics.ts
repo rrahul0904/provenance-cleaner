@@ -42,16 +42,33 @@ export function trigramOverlap(source: string, output: string) {
   return union ? intersection / union : 0;
 }
 
+export function lexicalReplacementPercent(source: string, output: string) {
+  const sourceWords = words(source);
+  if (!sourceWords.length) return 0;
+  const outputCounts = new Map<string, number>();
+  for (const token of words(output)) outputCounts.set(token, (outputCounts.get(token) ?? 0) + 1);
+  let shared = 0;
+  for (const token of sourceWords) {
+    const remaining = outputCounts.get(token) ?? 0;
+    if (remaining > 0) { shared += 1; outputCounts.set(token, remaining - 1); }
+  }
+  return Math.max(0, Math.min(100, (1 - shared / sourceWords.length) * 100));
+}
+
 export function buildTransformMetrics(source: string, output: string, protectedTotal: number, protectedPreserved: number): TransformMetrics {
   const sourceWords = words(source).length;
   const outputWords = words(output).length;
+  const lengthRatio = sourceWords ? outputWords / sourceWords : 1;
   return {
     sourceWords,
     outputWords,
-    lengthRatio: sourceWords ? outputWords / sourceWords : 1,
+    lengthRatio,
+    retainedPercent: lengthRatio * 100,
+    wordingReplacedPercent: lexicalReplacementPercent(source, output),
     protectedTotal,
     protectedPreserved,
     longestSharedWordRun: longestSharedWordRun(source, output),
     trigramOverlap: trigramOverlap(source, output),
+    unprotectedLongestSharedWordRun: 0,
   };
 }
