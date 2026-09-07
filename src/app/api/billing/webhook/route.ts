@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { completeCheckoutPurchase, expireCheckoutPurchase, grantSubscriptionInvoice, linkStripeCustomer, recordPolicyRefund, upsertSubscription } from "@/lib/billing/server";
-import { subscriptionPlanFromPrice } from "@/lib/billing/subscriptions";
+import { subscriptionGrantForPaidLine, subscriptionPlanFromPrice } from "@/lib/billing/subscriptions";
 import { getStripe } from "@/lib/billing/stripe";
 import { apiError, apiOk, requestContext } from "@/lib/server/api";
 import { logEvent } from "@/lib/server/observability";
@@ -10,7 +10,7 @@ const MAX_WEBHOOK_BYTES=1_048_576;
 function purchaseId(session:Stripe.Checkout.Session){return session.mode==="subscription"?null:(session.metadata?.purchase_id||session.client_reference_id||null);}
 function checkoutCountry(session:Stripe.Checkout.Session){return session.collected_information?.shipping_details?.address?.country??session.customer_details?.address?.country??null;}
 function object(value:unknown){return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};}
-function stripeId(value: string | { id: string } | null | undefined){return typeof value === "string" ? value : value?.id ?? null;}
+function stripeId(value:unknown){if(typeof value==="string")return value;const candidate=object(value);return typeof candidate.id==="string"?candidate.id:null;}
 function unixDate(value: number | null | undefined){return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1_000).toISOString() : null;}
 function subscriptionPriceId(subscription: Stripe.Subscription){const first=subscription.items.data[0];return first?.price?.id??null;}
 async function reconcileSubscription(event:Stripe.Event, subscription:Stripe.Subscription){
@@ -21,11 +21,35 @@ async function reconcileSubscription(event:Stripe.Event, subscription:Stripe.Sub
   const item=subscription.items.data[0];
   await upsertSubscription({eventId:event.id,eventType:event.type,userId,customerId,subscriptionId:subscription.id,priceId,planId,status:subscription.status,periodStart:unixDate(item?.current_period_start),periodEnd:unixDate(item?.current_period_end),cancelAtPeriodEnd:subscription.cancel_at_period_end,credits});
 }
+function invoiceLineSubscriptionId(line:Stripe.InvoiceLineItem){
+  const direct=stripeId(line.subscription);if(direct)return direct;
+  const parent=object(line.parent);const details=object(parent.subscription_item_details??parent.invoice_item_details);
+  return stripeId(details.subscription);
+}
+function invoiceLineIsProration(line:Stripe.InvoiceLineItem){
+  const parent=object(line.parent);const details=object(parent.subscription_item_details??parent.invoice_item_details);
+  return details.proration===true;
+}
+function invoiceLinePriceId(line:Stripe.InvoiceLineItem){
+  const pricing=object(line.pricing);const details=object(pricing.price_details);
+  return stripeId(details.price);
+}
+function invoiceLineQuantity(line:Stripe.InvoiceLineItem){
+  if(typeof line.quantity==="number"&&Number.isFinite(line.quantity))return line.quantity;
+  const candidate=Number((line as unknown as {quantity_decimal?:unknown}).quantity_decimal);
+  return Number.isFinite(candidate)?candidate:null;
+}
 async function reconcileSubscriptionInvoice(event:Stripe.Event, invoice:Stripe.Invoice){
-  const customerId=stripeId(invoice.customer);const subscriptionId=stripeId(invoice.parent?.subscription_details?.subscription ?? null);
+  const customerId=stripeId(invoice.customer);const subscriptionId=stripeId(invoice.parent?.subscription_details?.subscription??null);
   if(!customerId||!subscriptionId||!invoice.id)return;
-  const line=invoice.lines.data[0];
-  await grantSubscriptionInvoice({eventId:event.id,eventType:event.type,invoiceId:invoice.id,customerId,subscriptionId,periodStart:unixDate(line?.period?.start),periodEnd:unixDate(line?.period?.end)});
+  const candidates=invoice.lines.data.filter((line)=>invoiceLineSubscriptionId(line)===subscriptionId&&!invoiceLineIsProration(line));
+  const recognized=candidates.filter((line)=>subscriptionPlanFromPrice(invoiceLinePriceId(line))!==null);
+  if(recognized.length===0)return;
+  if(recognized.length!==1)throw new Error("ambiguous_subscription_invoice");
+  const line=recognized[0];const priceId=invoiceLinePriceId(line);const quantity=invoiceLineQuantity(line);
+  const grant=subscriptionGrantForPaidLine(priceId,quantity);
+  if(!grant)throw new Error("invalid_subscription_invoice_line");
+  await grantSubscriptionInvoice({eventId:event.id,eventType:event.type,invoiceId:invoice.id,customerId,subscriptionId,priceId:grant.priceId,planId:grant.planId,quantity:grant.quantity,credits:grant.credits,periodStart:unixDate(line.period?.start),periodEnd:unixDate(line.period?.end)});
 }
 
 async function ensurePaymentDetails(session:Stripe.Checkout.Session){
