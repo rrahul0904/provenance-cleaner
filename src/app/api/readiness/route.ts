@@ -6,6 +6,7 @@ import { readinessSummary } from "@/lib/server/env";
 export const dynamic = "force-dynamic";
 const REQUIRED_PHASE6_SCHEMA = "20260902034500";
 const REQUIRED_PHASE7_SCHEMA = "20260903144643";
+const REQUIRED_PHASE8_SCHEMA = "20260907055200";
 
 function record(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -26,6 +27,13 @@ export async function GET(request: Request) {
   } catch { phase7 = null; }
   const phase7Ready = phase7?.schemaVersion === REQUIRED_PHASE7_SCHEMA;
 
+  let phase8: Record<string, unknown> | null = null;
+  try {
+    const { data, error } = await createAdminClient().rpc("billing_phase8_status");
+    if (!error) phase8 = record(data);
+  } catch { phase8 = null; }
+  const phase8Ready = phase8?.ready === true && phase8.schemaVersion === REQUIRED_PHASE8_SCHEMA;
+
   let adminStatus: Record<string, unknown> | null = null;
   try {
     const { data, error } = await createAdminClient().rpc("ops_admin_status");
@@ -38,12 +46,14 @@ export async function GET(request: Request) {
     adminOwner: { configured: adminOwnerReady, required: true },
     phase6Schema: { configured: phase6Ready, required: true },
     phase7Schema: { configured: phase7Ready, required: true },
+    phase8Schema: { configured: phase8Ready, required: true },
   };
   const missing = [
     ...env.missing,
     ...(adminOwnerReady ? [] : ["adminOwner"]),
     ...(phase6Ready ? [] : ["phase6Schema"]),
     ...(phase7Ready ? [] : ["phase7Schema"]),
+    ...(phase8Ready ? [] : ["phase8Schema"]),
   ];
   const ready = missing.length === 0;
 
@@ -61,6 +71,13 @@ export async function GET(request: Request) {
     phase7: phase7 ? {
       ready: phase7Ready,
       schemaVersion: phase7.schemaVersion,
+    } : null,
+    phase8: phase8 ? {
+      ready: phase8Ready,
+      schemaVersion: phase8.schemaVersion,
+      invoiceAuthoritativeGrants: phase8.invoiceAuthoritativeGrants,
+      subscriptionDeletionSafety: phase8.subscriptionDeletionSafety,
+      legacyRefundUpgrade: phase8.legacyRefundUpgrade,
     } : null,
     admin: {
       ready: adminOwnerReady,
