@@ -21,6 +21,7 @@ export type Database = {
       billing_get_refund_quote: { Args: { p_purchase_id: string; p_user_id: string }; Returns: Json };
       billing_grant_credits: { Args: { p_credits: number; p_kind: string; p_metadata?: Json; p_source_key: string; p_user_id: string }; Returns: Json };
       billing_phase6_status: { Args: Record<string, never>; Returns: Json };
+      billing_phase8_status: { Args: Record<string, never>; Returns: Json };
       billing_prepare_account_deletion: { Args: { p_user_id: string }; Returns: Json };
       billing_reconcile_deleted_subjects: { Args: { p_limit?: number }; Returns: Json };
       billing_record_policy_refund: { Args: { p_amount: number; p_currency: string; p_event_id: string; p_event_type: string; p_purchase_id: string; p_reason: string; p_refund_id: string }; Returns: Json };
