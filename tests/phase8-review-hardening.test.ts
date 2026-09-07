@@ -8,6 +8,7 @@ const accountDelete = readFileSync("src/app/api/account/delete/route.ts", "utf8"
 const webhook = readFileSync("src/app/api/billing/webhook/route.ts", "utf8");
 const transform = readFileSync("src/components/transform-workbench.tsx", "utf8");
 const fileWorkbench = readFileSync("src/components/file-workbench.tsx", "utf8");
+const readiness = readFileSync("src/app/api/readiness/route.ts", "utf8");
 
 const originalStripeKey = process.env.STRIPE_SECRET_KEY;
 afterEach(() => {
@@ -49,6 +50,9 @@ describe("Phase 8 review hardening", () => {
     expect(accountDelete).toContain("stripe.subscriptions.cancel(subscription.id)");
     expect(accountDelete).toContain("markAccountSubscriptionsCanceled(userId)");
     expect(hardening).toContain("p_status='canceled' and v_existing_customer");
+    expect(readiness).toContain('REQUIRED_PHASE8_SCHEMA = "20260907055200"');
+    expect(readiness).toContain("billing_phase8_status");
+    expect(readiness).toContain("phase8Schema");
   });
 
   it("prevents billable UI inputs from invalidating a completed in-flight result", () => {
