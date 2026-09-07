@@ -54,5 +54,5 @@ jobs:
       - run: npm run test:e2e
       - run: npm run predeploy
         env: *phase7_env
-      - name: Verify Phase 7 migration contains no destructive DDL
-        run: '! rg -n "^\s*(drop table|truncate|delete from)" supabase/migrations/20260903144643_phase7_admin_finops_subscriptions.sql'
+      - name: Verify final migrations contain no destructive table DDL
+        run: '! rg -n "^\s*(drop table|truncate|delete from)" supabase/migrations/20260903144643_phase7_admin_finops_subscriptions.sql supabase/migrations/20260907054500_phase8_review_hardening.sql supabase/migrations/20260907055200_phase8_readiness.sql'
