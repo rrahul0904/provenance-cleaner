@@ -29,6 +29,6 @@ describe("Phase 8 subscription release regressions", () => {
   it("exposes an actionable monthly plan UI and requires the Phase 7 schema for readiness", () => {
     expect(pricing).toContain("SubscriptionPlanGrid");
     expect(readiness).toContain('REQUIRED_PHASE7_SCHEMA = "20260903144643"');
-    expect(readiness).toContain("phase7Schema");
+    expect(readiness).toContain("phase7Schema");\n    expect(readiness).toContain("ops_admin_status");\n    expect(readiness).toContain("adminOwner");
   });
 });
