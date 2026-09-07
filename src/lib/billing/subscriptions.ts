@@ -44,6 +44,12 @@ export function isGrantableSubscriptionStatus(status: string): status is "active
   return status === "active" || status === "trialing";
 }
 
+export function subscriptionGrantForPaidLine(priceId: string | null | undefined, quantity: number | null | undefined) {
+  const planId = subscriptionPlanFromPrice(priceId);
+  if (!planId || quantity !== 1) return null;
+  return { planId, priceId: priceId!, quantity: 1 as const, credits: SUBSCRIPTION_PLANS[planId].credits };
+}
+
 export function subscriptionInvoiceSourceKey(invoiceId: string) {
   if (!/^in_[A-Za-z0-9]+$/u.test(invoiceId)) throw new Error("Invalid Stripe invoice identifier.");
   return `subscription_invoice:${invoiceId}`;
