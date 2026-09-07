@@ -69,6 +69,18 @@ create table if not exists billing.purchase_refunds (
   created_at timestamptz not null default now()
 );
 
+-- Older Phase 6 preview schemas created purchase_refunds before the reason field.
+-- CREATE TABLE IF NOT EXISTS does not evolve those tables, so make the upgrade
+-- explicit before any RPC reads or writes this column.
+alter table billing.purchase_refunds add column if not exists reason text;
+update billing.purchase_refunds set reason='customer' where reason is null;
+alter table billing.purchase_refunds alter column reason set default 'customer';
+alter table billing.purchase_refunds alter column reason set not null;
+alter table billing.purchase_refunds drop constraint if exists purchase_refunds_reason_check;
+alter table billing.purchase_refunds
+  add constraint purchase_refunds_reason_check
+  check (reason in ('customer','country_policy','account_deleted'));
+
 create table if not exists billing.job_history (
   id uuid primary key default gen_random_uuid(),
   reservation_id uuid unique references billing.credit_reservations(id) on delete restrict,
