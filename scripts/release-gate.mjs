@@ -49,9 +49,11 @@ if (existsSync(readinessPath)) {
   const readiness = readFileSync(readinessPath, "utf8");
   add("Readiness requires final Phase 6", readiness.includes('REQUIRED_PHASE6_SCHEMA = "20260902034500"'), "exact Phase 6 schema required");
   add("Readiness requires final Phase 7", readiness.includes('REQUIRED_PHASE7_SCHEMA = "20260903144643"') && readiness.includes("phase7Schema"), "exact Phase 7 schema required");
+  add("Readiness requires final Phase 8", readiness.includes('REQUIRED_PHASE8_SCHEMA = "20260907055200"') && readiness.includes("phase8Schema"), "exact Phase 8 hardening schema required");
 } else {
   add("Readiness requires final Phase 6", false, "readiness route missing");
   add("Readiness requires final Phase 7", false, "readiness route missing");
+  add("Readiness requires final Phase 8", false, "readiness route missing");
 }
 
 for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"} ${item.name} — ${item.detail}`);
