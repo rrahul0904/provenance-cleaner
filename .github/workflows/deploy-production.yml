@@ -35,6 +35,8 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      - name: Ensure Stripe TEST Billing Portal
+        run: node --env-file=.env.local scripts/configure-stripe-portal.mjs
       - run: npm test
       - run: npm run lint
       - run: npm run build
