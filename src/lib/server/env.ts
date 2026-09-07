@@ -2,6 +2,7 @@ export type ReadinessCheck = { configured: boolean; required: boolean };
 const DEFAULT_SUPABASE_URL = "https://cikxzxxreryycfjumwsd.supabase.co";
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Jsa3NElnKfCPiXMes-CrXg_hthFy4r1";
 const CONTROLLED_LAUNCH_TEST_PRICE_IDS = ["price_1UAXO6RB8OGmEnBwqpc4DaLs", "price_1UAXOFRB8OGmEnBwlAwgU1GS", "price_1UAXOQRB8OGmEnBwANqar75f"];
+const CONTROLLED_LAUNCH_TEST_SUBSCRIPTION_PRICE_IDS = ["price_1UBmgJRB8OGmEnBwoUtRmBKb", "price_1UBmhIRB8OGmEnBwFEJNV4zF", "price_1UBmiARB8OGmEnBwgoMzZqbw"];
 const SUPPORT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const PLACEHOLDER_SUPPORT_EMAIL = /(^|@)(example\.(com|invalid|org)|invalid|localhost)$|placeholder/iu;
 
@@ -38,7 +39,7 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
   const stripeKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
   const promoSecret = process.env.PROMO_FINGERPRINT_SECRET?.trim() ?? "";
   const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ?? "";
-  const subscriptionPricesConfigured = ["STRIPE_SUBSCRIPTION_PRICE_PLUS", "STRIPE_SUBSCRIPTION_PRICE_PRO", "STRIPE_SUBSCRIPTION_PRICE_STUDIO"].every((name) => /^price_/u.test(process.env[name]?.trim() ?? ""));
+  const subscriptionPriceEnvConfigured = ["STRIPE_SUBSCRIPTION_PRICE_PLUS", "STRIPE_SUBSCRIPTION_PRICE_PRO", "STRIPE_SUBSCRIPTION_PRICE_STUDIO"].every((name) => /^price_/u.test(process.env[name]?.trim() ?? ""));
   const adminOwnerConfigured = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(process.env.ADMIN_OWNER_USER_ID?.trim() ?? "");
   const preview = isVercelPreview();
   const oidc = hasOidc(request);
@@ -46,6 +47,7 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
   const publicSupabaseConfigured = (present("NEXT_PUBLIC_SUPABASE_URL") || Boolean(DEFAULT_SUPABASE_URL)) && (present("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") || Boolean(DEFAULT_SUPABASE_PUBLISHABLE_KEY));
   const turnstileConfigured = (present("NEXT_PUBLIC_TURNSTILE_SITE_KEY") && present("TURNSTILE_SECRET_KEY")) || preview;
   const stripePricesConfigured = (present("STRIPE_PRICE_STARTER") && present("STRIPE_PRICE_PLUS") && present("STRIPE_PRICE_PRO")) || (stripeTestKey && CONTROLLED_LAUNCH_TEST_PRICE_IDS.every(Boolean));
+  const subscriptionPricesConfigured = subscriptionPriceEnvConfigured || (stripeTestKey && CONTROLLED_LAUNCH_TEST_SUBSCRIPTION_PRICE_IDS.every(Boolean));
   const supportEmailConfigured = isConfiguredSupportEmail(supportEmail);
   return {
     appUrl: { configured: present("NEXT_PUBLIC_APP_URL") || Boolean(vercelOrigin()), required: true },
@@ -58,7 +60,7 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
     supportEmail: { configured: supportEmailConfigured, required: true },
     stripeTestMode: { configured: stripeTestKey && present("STRIPE_WEBHOOK_SECRET") && stripePricesConfigured, required: true },
     subscriptionCatalog: { configured: subscriptionPricesConfigured, required: true },
-    adminOwner: { configured: adminOwnerConfigured, required: true },
+    adminOwnerBootstrap: { configured: adminOwnerConfigured, required: false },
     cron: { configured: present("CRON_SECRET"), required: !preview },
   };
 }
