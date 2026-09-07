@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getRequestIdentity } from "@/lib/auth/identity";
-import { cancelAccountDeletion, finalizeAccountDeletion, getPhase6Status, prepareAccountDeletion } from "@/lib/billing/server";
+import { cancelAccountDeletion, finalizeAccountDeletion, getLinkedStripeCustomer, getPhase6Status, markAccountSubscriptionsCanceled, prepareAccountDeletion } from "@/lib/billing/server";
+import { getStripe } from "@/lib/billing/stripe";
 import { ApiRequestError, apiError, apiOk, parseJson, requestContext } from "@/lib/server/api";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -9,6 +10,28 @@ export const runtime="nodejs";
 const schema=z.object({confirmation:z.literal("DELETE")});
 const REQUIRED_PHASE6_SCHEMA="20260902034500";
 function isReady(value:unknown){return Boolean(value&&typeof value==="object"&&!Array.isArray(value)&&(value as Record<string,unknown>).ready===true&&(value as Record<string,unknown>).schemaVersion===REQUIRED_PHASE6_SCHEMA);}
+
+async function cancelLinkedSubscriptions(userId:string){
+  const customerId=await getLinkedStripeCustomer(userId);
+  if(!customerId){await markAccountSubscriptionsCanceled(userId);return 0;}
+  const stripe=getStripe();
+  let startingAfter:string|undefined;
+  let canceled=0;
+  do{
+    const page=await stripe.subscriptions.list({customer:customerId,status:"all",limit:100,...(startingAfter?{starting_after:startingAfter}:{})});
+    for(const subscription of page.data){
+      if(subscription.status==="canceled"||subscription.status==="incomplete_expired")continue;
+      await stripe.subscriptions.cancel(subscription.id);
+      canceled+=1;
+    }
+    if(!page.has_more)break;
+    const last=page.data.at(-1)?.id;
+    if(!last)throw new Error("subscription_pagination_failed");
+    startingAfter=last;
+  }while(startingAfter);
+  await markAccountSubscriptionsCanceled(userId);
+  return canceled;
+}
 
 export async function POST(request:Request){
   const context=requestContext(request,"/api/account/delete");
@@ -22,6 +45,7 @@ export async function POST(request:Request){
     if(!isReady(await getPhase6Status()))return apiError(context,"deletion_unavailable","Account deletion is not ready until the final billing migration is verified.",503);
     const userIdHash=requestSubjectKey(request,identity.userId);
     await prepareAccountDeletion(identity.userId);prepared=true;
+    const canceledSubscriptions=await cancelLinkedSubscriptions(identity.userId);
     const admin=createAdminClient();
     const {error}=await admin.auth.admin.deleteUser(identity.userId);
     if(error){
@@ -30,12 +54,12 @@ export async function POST(request:Request){
     }
     let reconciliationPending=false;
     try{await finalizeAccountDeletion(identity.userId);prepared=false;}catch{reconciliationPending=true;prepared=false;}
-    logEvent("account_deleted",{requestId:context.requestId,userIdHash,reconciliationPending});
-    return apiOk(context,{deleted:true,reconciliationPending});
+    logEvent("account_deleted",{requestId:context.requestId,userIdHash,reconciliationPending,canceledSubscriptions});
+    return apiOk(context,{deleted:true,reconciliationPending,canceledSubscriptions});
   }catch(error){
     if(error instanceof ApiRequestError)return apiError(context,error.code,error.message,error.status);
     if(prepared&&identity){try{await cancelAccountDeletion(identity.userId);prepared=false;}catch{/* cron safely cancels stale pending deletion when the Auth identity still exists */}}
     logEvent("account_delete_failed",{requestId:context.requestId,subjectHash:requestSubjectKey(request)});
-    return apiError(context,"account_delete_failed","Account deletion could not be completed.",503);
+    return apiError(context,"account_delete_failed","Account deletion could not be completed. Any linked recurring billing must be canceled before the identity can be removed.",503);
   }
 }
