@@ -7,7 +7,7 @@ import { logEvent } from "@/lib/server/observability";
 
 export const runtime="nodejs";
 const MAX_WEBHOOK_BYTES=1_048_576;
-function purchaseId(session:Stripe.Checkout.Session){return session.mode==="payment"?(session.metadata?.purchase_id||session.client_reference_id||null):null;}
+function purchaseId(session:Stripe.Checkout.Session){return session.mode==="subscription"?null:(session.metadata?.purchase_id||session.client_reference_id||null);}
 function checkoutCountry(session:Stripe.Checkout.Session){return session.collected_information?.shipping_details?.address?.country??session.customer_details?.address?.country??null;}
 function object(value:unknown){return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};}
 function stripeId(value: string | { id: string } | null | undefined){return typeof value === "string" ? value : value?.id ?? null;}
