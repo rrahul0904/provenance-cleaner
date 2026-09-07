@@ -5,7 +5,9 @@ import { SUBSCRIPTION_PLANS } from "@/lib/billing/subscriptions";
 const webhook = readFileSync("src/app/api/billing/webhook/route.ts", "utf8");
 const checkout = readFileSync("src/app/api/billing/subscription-checkout/route.ts", "utf8");
 const pricing = readFileSync("src/app/pricing/page.tsx", "utf8");
-const readiness = readFileSync("src/app/api/readiness/route.ts", "utf8");\nconst portal = readFileSync("src/app/api/billing/portal/route.ts", "utf8");\nconst portalBootstrap = readFileSync("scripts/configure-stripe-portal.mjs", "utf8");
+const readiness = readFileSync("src/app/api/readiness/route.ts", "utf8");
+const portal = readFileSync("src/app/api/billing/portal/route.ts", "utf8");
+const portalBootstrap = readFileSync("scripts/configure-stripe-portal.mjs", "utf8");
 
 describe("Phase 8 subscription release regressions", () => {
   it("keeps the recurring catalog aligned to the Stripe TEST products", () => {
@@ -26,7 +28,15 @@ describe("Phase 8 subscription release regressions", () => {
     expect(checkout).toContain("billing_get_stripe_customer");
   });
 
-  it("binds Portal sessions to an idempotently provisioned TEST configuration", () => {\n    expect(portal).toContain("billingPortal.configurations.list");\n    expect(portal).toContain("configuration: configuration.id");\n    expect(portalBootstrap).toContain("billingPortal.configurations.create");\n    expect(portalBootstrap).toContain("subscription_update");\n    expect(portalBootstrap).toContain("subscription_cancel");\n  });\n\n  it("exposes an actionable monthly plan UI and requires final database readiness", () => {
+  it("binds Portal sessions to an idempotently provisioned TEST configuration", () => {
+    expect(portal).toContain("billingPortal.configurations.list");
+    expect(portal).toContain("configuration: configuration.id");
+    expect(portalBootstrap).toContain("billingPortal.configurations.create");
+    expect(portalBootstrap).toContain("subscription_update");
+    expect(portalBootstrap).toContain("subscription_cancel");
+  });
+
+  it("exposes an actionable monthly plan UI and requires final database readiness", () => {
     expect(pricing).toContain("SubscriptionPlanGrid");
     expect(readiness).toContain('REQUIRED_PHASE7_SCHEMA = "20260903144643"');
     expect(readiness).toContain("phase7Schema");
