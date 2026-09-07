@@ -55,7 +55,7 @@ export async function POST(request:Request){
       if(session.mode==="subscription"){
         const userId=session.metadata?.user_id??session.client_reference_id;const customerId=stripeId(session.customer);
         if(event.type==="checkout.session.completed"&&userId&&customerId)await linkStripeCustomer(userId,customerId);
-        logEvent("subscription_checkout_completed",{requestId:context.requestId,stripeEventId:event.id,userIdHash:userId?String(userId).slice(0,8):"unknown",customerLinked:Boolean(userId&&customerId)});
+        logEvent("subscription_checkout_completed",{requestId:context.requestId,stripeEventId:event.id,customerLinked:Boolean(userId&&customerId)});
         return apiOk(context,{received:true,subscription:true});
       }
       const id=purchaseId(session);const country=checkoutCountry(session);
