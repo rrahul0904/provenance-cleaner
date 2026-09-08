@@ -54,7 +54,7 @@ export function CreditPackGrid({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return <div className="account-topup">
       <div className="account-topup-head">
-        <div><p className="eyebrow">One-time top up</p><h2>Add credits without a subscription.</h2></div>
+        <div><p className="eyebrow">One-time top up</p><h2>Add processing allowance without a subscription.</h2></div>
         <span className="pill">Stripe TEST</span>
       </div>
       <div className="account-topup-actions">
@@ -65,7 +65,7 @@ export function CreditPackGrid({ compact = false }: { compact?: boolean }) {
           disabled={!challengeToken || busyPack !== null}
           onClick={() => void buy(pack.id)}
         >
-          {busyPack === pack.id ? "Opening Stripe…" : `+${pack.credits} · $${pack.priceUsd.toFixed(2)}`}
+          {busyPack === pack.id ? "Opening Stripe…" : `${pack.credits} units · ${pack.priceUsd.toFixed(2)}`}
         </button>)}
       </div>
       <TurnstileWidget action="account" onToken={onToken} resetKey={resetKey} />
@@ -77,10 +77,10 @@ export function CreditPackGrid({ compact = false }: { compact?: boolean }) {
     <div className="credit-pack-grid">
       {Object.values(CREDIT_PACKS).map((pack, index) => <article className={`credit-pack-card ${index === 1 ? "featured" : ""}`} key={pack.id}>
         <span className="mono-label">{index === 1 ? "MOST FLEXIBLE" : "ONE-TIME PACK"}</span>
-        <strong>+{pack.credits}</strong>
+        <strong>{pack.credits}<small> units</small></strong>
         <h2>{pack.label}</h2>
         <p>{`$${pack.priceUsd.toFixed(2)} · hosted Stripe TEST Checkout · no subscription`}</p>
-        <div className="pack-unit">{`$${(pack.priceUsd / pack.credits).toFixed(2)} / credit`}</div>
+        <div className="pack-unit">{`$${(pack.priceUsd / pack.credits).toFixed(2)} / unit`}</div>
         <button className={index === 1 ? "secondary" : "primary"} type="button" disabled={!challengeToken || busyPack !== null} onClick={() => void buy(pack.id)}>
           {busyPack === pack.id ? "Opening Stripe…" : `Buy ${pack.label}`}
         </button>
