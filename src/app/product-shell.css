@@ -386,3 +386,22 @@ button{border-radius:8px;padding:9px 12px;font-size:.74rem}
   .product-proof-strip>div:last-child{border-bottom:0}
   .credit-pack-grid{grid-template-columns:1fr}
 }
+
+.account-topup{
+  margin:0 0 12px;
+  padding:14px 16px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+}
+.account-topup-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.account-topup-head h2{margin:0;font:650 1rem/1.2 var(--font-sans);letter-spacing:-.025em}
+.account-topup-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.account-topup-actions button{min-width:120px}
+.credit-pack-card>button{width:100%;margin-top:14px}
+.workspace-stage>[role="tabpanel"][hidden]{display:none!important}
+@media(max-width:620px){
+  .account-topup-head{align-items:flex-start;flex-direction:column}
+  .account-topup-actions{display:grid;grid-template-columns:1fr;width:100%}
+  .account-topup-actions button{width:100%}
+}
