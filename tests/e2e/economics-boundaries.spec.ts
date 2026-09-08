@@ -14,7 +14,7 @@ function pngOfSize(size: number) {
 
 async function open(page: import("@playwright/test").Page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: /Inspect content.*Change only what you can verify/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
 }
 async function selectMode(page: import("@playwright/test").Page, mode: "Files" | "Rewrite") {
   const tab = page.getByRole("tab", { name: new RegExp(`^${mode}`, "i") });
@@ -51,7 +51,7 @@ test("free TXT scan creates no guest and the first clean bills by source words",
   expect(guestCalls).toBe(0);
   expect(sanitizeCalls).toBe(0);
 
-  await expect(scanner.getByRole("button", { name: /Clean safe findings · 2 credits/ })).toBeEnabled();
+  await expect(scanner.getByRole("button", { name: /Clean safe findings · 2 usage units/ })).toBeEnabled();
   await scanner.getByRole("button", { name: /Clean safe findings · 2 credits/ }).click();
   await expect(scanner.getByText(/2 credits charged · 0 remaining/)).toBeVisible();
   expect(guestCalls).toBe(1);
