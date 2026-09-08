@@ -54,10 +54,10 @@ export function SubscriptionPlanGrid() {
     <div className="credit-pack-grid">
       {Object.values(SUBSCRIPTION_PLANS).map(plan => <article className="credit-pack-card" key={plan.id}>
         <span className="mono-label">MONTHLY PLAN</span>
-        <strong>{plan.credits}</strong>
+        <strong>{plan.credits}<small> units / mo</small></strong>
         <h2>{plan.label}</h2>
         <p>{`$${(plan.monthlyCents / 100).toFixed(2)} / month · ${plan.credits} credits each paid period · TEST mode`}</p>
-        <div className="pack-unit">Existing credits and one-time packs remain available.</div>
+        <div className="pack-unit">One-time processing packs remain available.</div>
         <button className="primary" type="button" disabled={!challengeToken || busyPlan !== null} onClick={() => void subscribe(plan.id)}>
           {busyPlan === plan.id ? "Opening Stripe…" : `Subscribe to ${plan.label}`}
         </button>
