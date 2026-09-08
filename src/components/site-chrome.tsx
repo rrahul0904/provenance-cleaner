@@ -4,11 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const NAV_ITEMS = [
-  ["How it works", "/how-it-works"],
   ["Workbench", "/#workbench"],
   ["Capabilities", "/capabilities"],
+  ["How it works", "/how-it-works"],
   ["Pricing", "/pricing"],
-  ["FAQ", "/faq"],
 ] as const;
 
 export function SiteHeader() {
@@ -23,7 +22,7 @@ export function SiteHeader() {
 
   return <header className="site-header">
     <div className="nav shell">
-      <Link className="brand" href="/" aria-label="Provenance Cleaner home">provenance<span>/clean</span></Link>
+      <Link className="brand" href="/" aria-label="Provenance Cleaner home">Provenance <span>Cleaner</span></Link>
       <nav className="desktop-nav" aria-label="Primary">
         {NAV_ITEMS.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
       </nav>
@@ -45,7 +44,7 @@ export function SiteHeader() {
         </nav>
         <div className="mobile-menu-footer">
           <div><span className="mono-label">PRIVACY MODEL</span><strong>Inspect locally. Send only when you choose an action.</strong></div>
-          <Link className="primary-link" href="/#scanner" onClick={() => setOpen(false)}>Start free scan</Link>
+          <Link className="primary-link" href="/#workbench" onClick={() => setOpen(false)}>Start free scan</Link>
         </div>
       </div>
     </div>
@@ -55,7 +54,7 @@ export function SiteHeader() {
 export function SiteFooter() {
   return <footer className="site-footer">
     <div className="shell footer-grid">
-      <div className="footer-brand"><Link className="brand" href="/">provenance<span>/clean</span></Link><p>A privacy-first content integrity workbench where actions are inspected, justified, verified, and receipted.</p></div>
+      <div className="footer-brand"><Link className="brand" href="/">Provenance <span>Cleaner</span></Link><p>A privacy-first content integrity workbench where actions are inspected, justified, verified, and receipted.</p></div>
       <nav aria-label="Legal"><Link href="/privacy-policy">Privacy</Link><Link href="/terms-of-service">Terms</Link><Link href="/cookie-policy">Cookies</Link><Link href="/contact">Contact</Link><Link href="/auth">Sign in</Link></nav>
       <div className="footer-trust"><span className="status-dot"/>Evidence over claims · raw content is not intentionally retained</div>
     </div>
