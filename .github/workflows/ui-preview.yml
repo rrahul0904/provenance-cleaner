@@ -1,0 +1,47 @@
+name: ui-preview
+
+on:
+  push:
+    branches: [ui-overhaul-application-shell]
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+      - run: test "$(git rev-parse HEAD)" = "\${{ github.sha }}"
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm i -g vercel@59.10.0
+      - name: Link exact Vercel project
+        run: |
+          mkdir -p .vercel
+          printf '%s\n' '{"orgId":"team_zmEezpOKGZy2sH5nqTfO44LD","projectId":"prj_OfVZG87ItRr7Kzw6PJT9Z5ouw04K"}' > .vercel/project.json
+      - name: Pull Preview configuration
+        run: vercel pull --yes --environment=preview --token="\${VERCEL_TOKEN}" --scope="team_zmEezpOKGZy2sH5nqTfO44LD"
+        env:
+          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+      - name: Build Preview artifact
+        run: vercel build --token="\${VERCEL_TOKEN}" --scope="team_zmEezpOKGZy2sH5nqTfO44LD"
+        env:
+          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy Preview artifact only
+        id: deploy
+        run: |
+          URL="$(vercel deploy --prebuilt --yes --token="\${VERCEL_TOKEN}" --scope="team_zmEezpOKGZy2sH5nqTfO44LD")"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "### UI preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
