@@ -18,16 +18,17 @@ test("DNT does not emit third-party analytics from the public workbench", async 
   expect(analyticsRequests).toEqual([]);
 });
 
-test("homepage explains the evidence loop within the hero", async ({ page }) => {
+test("homepage explains the verification model without burying the workbench", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "See what your content is carrying." })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Start free inspection" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "See a verification receipt" })).toBeVisible();
-  const hero = page.locator(".hero");
-  await expect(hero.getByText("Drop content", { exact: true })).toBeVisible();
-  await expect(hero.getByText("See hidden signals", { exact: true })).toBeVisible();
-  await expect(hero.getByText("Clean safely", { exact: true })).toBeVisible();
-  await expect(hero.getByText("Get proof", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Inspect content.*Change only what you can verify/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open workbench" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "How verification works" })).toBeVisible();
+  const guarantees = page.locator(".product-status-grid");
+  await expect(guarantees.getByText("Local inspection", { exact: true })).toBeVisible();
+  await expect(guarantees.getByText("Conservative actions", { exact: true })).toBeVisible();
+  await expect(guarantees.getByText("Verified billing", { exact: true })).toBeVisible();
+  await expect(guarantees.getByText("Exportable evidence", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /^Text/i })).toBeVisible();
 });
 
 test("source canary is not persisted in browser storage after a free scan", async ({ page }) => {
@@ -152,14 +153,24 @@ test("public surfaces have main landmarks and no horizontal overflow across laun
   }
 });
 
-test("core workbench is keyboard reachable and exposes accessible async regions", async ({ page }) => {
+test("core workbench is keyboard reachable and exposes accessible async regions across tabs", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("region", { name: "Account and credits" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Provenance text scanner" })).toBeVisible();
+
+  const filesTab = page.getByRole("tab", { name: /^Files/i });
+  await filesTab.click();
+  await expect(filesTab).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("region", { name: "File metadata scanner" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Semantics-preserving editor" })).toBeVisible();
+
+  const rewriteTab = page.getByRole("tab", { name: /^Rewrite/i });
+  await rewriteTab.click();
+  await expect(rewriteTab).toHaveAttribute("aria-selected", "true");
+  const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('[aria-live="polite"]')).toHaveCount(1);
+
   await page.keyboard.press("Tab");
   const focused = await page.evaluate(() => document.activeElement?.tagName ?? null);
   expect(focused).not.toBe("BODY");
-  await expect(page.getByRole("region", { name: "Semantics-preserving editor" }).locator('[aria-live="polite"]')).toHaveCount(1);
 });
