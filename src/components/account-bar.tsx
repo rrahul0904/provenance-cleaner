@@ -137,7 +137,7 @@ export function AccountBar() {
   }
 
   return <section className={styles.bar} aria-label="Account and credits">
-    <div className={styles.identity}><p className={styles.eyebrow}>Credit wallet</p><strong>{identity ? (identity.isAnonymous ? "Guest session" : "Signed-in account") : "No account yet"}</strong><span className={styles.subtext}>{balance ? `${balance.available} available credits · ${balance.held} held · ${balance.settled} settled` : "Scanning is free. A guest can start automatically on the first clean."}</span></div>
+    <div className={styles.identity}><p className={styles.eyebrow}>Usage & account</p><strong>{identity ? (identity.isAnonymous ? "Guest session" : "Signed-in account") : "No account yet"}</strong><span className={styles.subtext}>{balance ? `${balance.available} available · ${balance.held} processing · ${balance.settled} settled` : "Inspection is free. An account is needed only when you run a paid action."}</span></div>
     {balance && <div className={styles.metrics} aria-label="Credit balance"><div><span>Available</span><strong>{balance.available}</strong></div><div><span>Held</span><strong>{balance.held}</strong></div><div><span>Settled</span><strong>{balance.settled}</strong></div></div>}
     <div className={styles.actions}>
       {!identity && <button disabled={busy || !supabase || !challengeToken} onClick={startGuest}>Start guest now</button>}
@@ -146,7 +146,7 @@ export function AccountBar() {
       {identity && <button className={styles.secondary} disabled={busy} onClick={signOut}>Sign out</button>}
     </div>
     <TurnstileWidget action="account" onToken={onChallenge} resetKey={challengeReset} />
-    <div className={styles.commitment}><span className="status-dot"/>Credits are committed only after verified successful work.</div>
+    <div className={styles.commitment}><span className="status-dot"/>Usage is committed only after verified successful work.</div>
     {message && <p className={styles.message} role="status">{message}</p>}
   </section>;
 }
