@@ -6,10 +6,10 @@ import { FileWorkbench } from "@/components/file-workbench";
 import { TransformWorkbench } from "@/components/transform-workbench";
 
 type Mode = "text" | "file" | "rewrite";
-const MODES: { id: Mode; label: string; description: string; anchor: string }[] = [
-  { id: "text", label: "Text", description: "Unicode + hidden signal inspection", anchor: "scanner" },
-  { id: "file", label: "Files", description: "Metadata + provenance inspection", anchor: "files" },
-  { id: "rewrite", label: "Rewrite", description: "Fact-preserving semantic editing", anchor: "editor" },
+const MODES: { id: Mode; label: string; short: string; description: string; anchor: string }[] = [
+  { id: "text", label: "Text inspection", short: "Text", description: "Unicode and hidden-signal inspection", anchor: "scanner" },
+  { id: "file", label: "File inspection", short: "Files", description: "Metadata and provenance inspection", anchor: "files" },
+  { id: "rewrite", label: "Protected rewrite", short: "Rewrite", description: "Fact-preserving semantic editing", anchor: "editor" },
 ];
 
 export function UnifiedWorkbench() {
@@ -28,9 +28,13 @@ export function UnifiedWorkbench() {
   }
 
   return <section id="workbench" className="unified-workbench" aria-label="Content integrity workbench">
-    <div className="workspace-toolbar">
+    <aside className="workspace-rail">
+      <div className="rail-heading">
+        <span className="rail-overline">TOOLS</span>
+        <strong>Choose a workflow</strong>
+      </div>
       <div className="workspace-tabs" role="tablist" aria-label="Workbench mode">
-        {MODES.map(item => <button
+        {MODES.map((item, index) => <button
           key={item.id}
           id={item.anchor}
           type="button"
@@ -40,25 +44,35 @@ export function UnifiedWorkbench() {
           className={mode === item.id ? "active" : ""}
           onClick={() => selectMode(item)}
         >
-          <span>{item.label}</span>
-          <small>{item.description}</small>
+          <span className="tab-index">0{index + 1}</span>
+          <span className="tab-copy"><strong>{item.short}</strong><small>{item.description}</small></span>
         </button>)}
       </div>
-      <div className="workspace-assurance">
+      <div className="rail-status">
         <span className="status-dot"/>
-        <div><strong>Inspection is free</strong><small>Credits commit only after verified actions</small></div>
+        <div><strong>Inspection is free</strong><small>Usage applies only to successful actions.</small></div>
       </div>
-    </div>
-    <div className="workspace-stage">
-      <div id="workspace-pane-text" role="tabpanel" aria-labelledby="scanner" hidden={mode !== "text"}>
-        <ScannerWorkbench />
+    </aside>
+
+    <div className="workspace-main">
+      <div className="workspace-context">
+        <div>
+          <span className="workspace-context-label">ACTIVE TOOL</span>
+          <strong>{MODES.find(item => item.id === mode)?.label}</strong>
+        </div>
+        <span className="workspace-context-state"><i/>Ready</span>
       </div>
-      {mounted.has("file") && <div id="workspace-pane-file" role="tabpanel" aria-labelledby="files" hidden={mode !== "file"}>
-        <FileWorkbench />
-      </div>}
-      {mounted.has("rewrite") && <div id="workspace-pane-rewrite" role="tabpanel" aria-labelledby="editor" hidden={mode !== "rewrite"}>
-        <TransformWorkbench />
-      </div>}
+      <div className="workspace-stage">
+        <div id="workspace-pane-text" role="tabpanel" aria-labelledby="scanner" hidden={mode !== "text"}>
+          <ScannerWorkbench />
+        </div>
+        {mounted.has("file") && <div id="workspace-pane-file" role="tabpanel" aria-labelledby="files" hidden={mode !== "file"}>
+          <FileWorkbench />
+        </div>}
+        {mounted.has("rewrite") && <div id="workspace-pane-rewrite" role="tabpanel" aria-labelledby="editor" hidden={mode !== "rewrite"}>
+          <TransformWorkbench />
+        </div>}
+      </div>
     </div>
   </section>;
 }
