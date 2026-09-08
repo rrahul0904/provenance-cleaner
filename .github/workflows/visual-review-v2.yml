@@ -59,6 +59,38 @@ jobs:
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+      - name: Build review contact sheet
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const { chromium } = require("@playwright/test");
+          (async()=>{
+            const items=[
+              ["Home · desktop","home-desktop.png"],
+              ["Files · desktop","files-desktop.png"],
+              ["Rewrite · desktop","rewrite-desktop.png"],
+              ["Pricing · desktop","pricing-desktop.png"],
+              ["Home · mobile","home-mobile.png"],
+            ];
+            const figures=items.map(([label,file])=>{
+              const data=fs.readFileSync(`visual-review-v2/${file}`).toString("base64");
+              return `<figure><figcaption>${label}</figcaption><img src="data:image/png;base64,${data}"></figure>`;
+            }).join("");
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({viewport:{width:900,height:1300}});
+            await page.setContent(`<!doctype html><style>
+              *{box-sizing:border-box}body{margin:0;padding:14px;background:#dfe3e8;font-family:Arial,sans-serif}
+              main{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+              figure{margin:0;padding:7px;background:#fff;border:1px solid #c9ced5;border-radius:8px}
+              figcaption{font-size:12px;font-weight:700;margin:0 0 6px;color:#111827}
+              img{display:block;width:100%;height:auto;border:1px solid #edf0f2}
+              figure:last-child{grid-column:1/-1;width:42%;justify-self:center}
+            </style><main>${figures}</main>`);
+            await page.waitForTimeout(250);
+            await page.screenshot({path:"visual-review-v2/contact-sheet.jpg",type:"jpeg",quality:32,fullPage:true});
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
       - name: Commit screenshots
         run: |
           git config user.name "provenance-visual-bot"
