@@ -705,3 +705,22 @@ button{border-radius:7px}
   textarea{min-height:280px}
   .product-proof-strip{grid-template-columns:1fr}
 }
+
+.pricing-section{margin-top:28px}
+.pricing-section-head{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+  margin-bottom:12px;padding:0 1px;
+}
+.pricing-section-head h2{
+  margin:0;font:650 1.28rem/1.2 var(--font-sans);letter-spacing:-.035em;
+}
+.pricing-section-head>p{
+  margin:0;max-width:440px;color:var(--muted);font-size:.68rem;line-height:1.5;text-align:right;
+}
+.credit-pack-card>strong small{
+  margin-left:5px;font-size:.68rem;font-weight:650;letter-spacing:-.01em;opacity:.62;
+}
+@media(max-width:620px){
+  .pricing-section-head{align-items:flex-start;flex-direction:column;gap:6px}
+  .pricing-section-head>p{text-align:left}
+}
