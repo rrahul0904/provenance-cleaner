@@ -91,6 +91,36 @@ jobs:
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+      - name: Build tiny review sheet
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const { chromium } = require("@playwright/test");
+          (async()=>{
+            const items=[
+              ["Home","home-desktop.png"],["Files","files-desktop.png"],
+              ["Rewrite","rewrite-desktop.png"],["Pricing","pricing-desktop.png"],
+              ["Mobile","home-mobile.png"]
+            ];
+            const figures=items.map(([label,file])=>{
+              const data=fs.readFileSync(`visual-review-v2/${file}`).toString("base64");
+              return `<figure><b>${label}</b><img src="data:image/png;base64,${data}"></figure>`;
+            }).join("");
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({viewport:{width:620,height:860}});
+            await page.setContent(`<!doctype html><style>
+              *{box-sizing:border-box}body{margin:0;padding:7px;background:#dfe3e8;font-family:Arial}
+              main{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+              figure{margin:0;padding:4px;background:white;border-radius:4px}
+              b{display:block;font-size:8px;margin-bottom:2px}
+              img{display:block;width:100%;height:auto}
+              figure:last-child{grid-column:1/-1;width:38%;justify-self:center}
+            </style><main>${figures}</main>`);
+            await page.waitForTimeout(100);
+            await page.screenshot({path:"visual-review-v2/contact-tiny.jpg",type:"jpeg",quality:8,fullPage:true});
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
       - name: Commit screenshots
         run: |
           git config user.name "provenance-visual-bot"
