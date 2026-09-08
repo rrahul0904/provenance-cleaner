@@ -27,7 +27,7 @@ export function SiteHeader() {
         {NAV_ITEMS.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
       </nav>
       <div className="nav-actions">
-        <Link className="nav-credit" href="/pricing">Credits</Link>
+        <Link className="nav-credit" href="/pricing">Usage</Link>
         <Link className="nav-account" href="/account">Account</Link>
         <button className="menu-trigger" type="button" aria-expanded={open} aria-controls="mobile-navigation" aria-label={open ? "Close navigation" : "Open navigation"} onClick={() => setOpen(value => !value)}>
           <span/><span/><span/>
@@ -44,7 +44,7 @@ export function SiteHeader() {
         </nav>
         <div className="mobile-menu-footer">
           <div><span className="mono-label">PRIVACY MODEL</span><strong>Inspect locally. Send only when you choose an action.</strong></div>
-          <Link className="primary-link" href="/#workbench" onClick={() => setOpen(false)}>Start free scan</Link>
+          <Link className="primary-link" href="/#workbench" onClick={() => setOpen(false)}>Open workspace</Link>
         </div>
       </div>
     </div>
