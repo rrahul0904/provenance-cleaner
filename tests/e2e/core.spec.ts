@@ -5,7 +5,7 @@ function pngWith(type: string, data: Uint8Array) { return Buffer.concat([Buffer.
 function cleanPng() { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk("IEND")]); }
 async function open(page: import("@playwright/test").Page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: /Inspect content.*Change only what you can verify/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
 }
 async function selectMode(page: import("@playwright/test").Page, mode: "Text" | "Files" | "Rewrite") {
   const tab = page.getByRole("tab", { name: new RegExp(`^${mode}`, "i") });
@@ -31,7 +31,7 @@ test("file metadata cleaning is server-authoritative and provenance blocks destr
 
 test("semantic editor surfaces validated mock output without a real model call", async ({ page }) => {
   await page.route("**/api/transform", async route => { const body = route.request().postDataJSON(); expect(body.challengeToken).toBe("dev-bypass"); expect(body.mode).toBe("parity"); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) }); });
-  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical."); await expect(editor.getByTestId("turnstile-bypass")).toBeVisible(); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(editor.getByText("1 credit committed", { exact: true })).toBeVisible(); await expect(editor.getByText(/Text-watermark verifier: unavailable/)).toBeVisible();
+  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical."); await expect(editor.getByTestId("turnstile-bypass")).toBeVisible(); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(editor.getByText("1 unit committed", { exact: true })).toBeVisible(); await expect(editor.getByText(/Text-watermark verifier: unavailable/)).toBeVisible();
 });
 
 test("semantic editor shows safe production errors", async ({ page }) => {
