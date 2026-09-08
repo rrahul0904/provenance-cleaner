@@ -43,6 +43,41 @@ test("in-flight transform locks source edits until the verified response complet
   await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); const textarea = editor.locator("textarea"); await textarea.fill("This source sentence was written in 2026 and is long enough for editing."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(textarea).toBeDisabled(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(textarea).toBeEnabled();
 });
 
+
+test("paid rewrite result survives switching away from and back to the workbench tab", async ({ page }) => {
+  await page.route("**/api/transform", async route => {
+    const body = route.request().postDataJSON();
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) });
+  });
+  await open(page);
+  await selectMode(page, "Rewrite");
+  const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
+  await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical.");
+  await editor.getByRole("button", { name: /Edit for parity/i }).click();
+  await selectMode(page, "Text");
+  await page.waitForTimeout(350);
+  await selectMode(page, "Rewrite");
+  await expect(page.getByRole("region", { name: "Semantics-preserving editor" }).locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged.");
+});
+
+test("pricing pack buttons invoke one-time checkout directly instead of routing through account", async ({ page }) => {
+  let checkoutCalls = 0;
+  await page.route("**/api/billing/checkout", async route => {
+    checkoutCalls += 1;
+    const body = route.request().postDataJSON();
+    expect(body.packId).toBe("starter");
+    expect(body.challengeToken).toBe("dev-bypass");
+    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "checkout_unavailable", message: "Checkout is not available.", requestId: "pricing-e2e" } }) });
+  });
+  await page.goto("/pricing");
+  const starter = page.getByRole("button", { name: "Buy Starter" });
+  await expect(starter).toBeEnabled();
+  await starter.click();
+  await expect(page.getByText("Checkout is not available.", { exact: true })).toBeVisible();
+  expect(checkoutCalls).toBe(1);
+});
+
 test("guest UX and Checkout do not mutate credits client-side", async ({ page }) => {
   await mockGuestPromo(page, 5); await page.route("**/api/billing/checkout", async route => { const body = route.request().postDataJSON(); expect(body.packId).toBe("starter"); expect(body.challengeToken).toBe("dev-bypass"); await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "checkout_unavailable", message: "Checkout is not available.", requestId: "checkout-e2e" } }) }); }); await open(page); const account = page.getByRole("region", { name: "Account and credits" }); await account.getByRole("button", { name: /Start guest/ }).click(); await expect(account.getByText("Guest session")).toBeVisible(); await expect(account.getByText(/5 available credits/)).toBeVisible(); await account.getByRole("button", { name: /\+10 · \$4\.99/ }).click(); await expect(account.getByText("Checkout is not available.")).toBeVisible(); await expect(account.getByText(/5 available credits/)).toBeVisible();
 });
