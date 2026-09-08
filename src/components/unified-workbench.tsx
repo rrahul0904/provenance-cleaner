@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ScannerWorkbench } from "@/components/scanner-workbench";
 import { FileWorkbench } from "@/components/file-workbench";
 import { TransformWorkbench } from "@/components/transform-workbench";
@@ -15,11 +15,6 @@ const MODES: { id: Mode; label: string; description: string; anchor: string }[] 
 export function UnifiedWorkbench() {
   const [mode, setMode] = useState<Mode>("text");
 
-  useEffect(() => {
-    const hash = window.location.hash.replace("#", "");
-    const match = MODES.find(item => item.anchor === hash);
-    if (match) setMode(match.id);
-  }, []);
 
   function selectMode(next: typeof MODES[number]) {
     setMode(next.id);
