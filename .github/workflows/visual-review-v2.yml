@@ -1,0 +1,68 @@
+name: visual-review-v2
+
+on:
+  push:
+    branches: [ui-visual-review-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    if: ${{ !contains(github.event.head_commit.message, '[visual-review-v2]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Start app
+        run: |
+          npm run dev -- --hostname 127.0.0.1 > /tmp/ui.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/ui.log
+          exit 1
+        env:
+          NODE_ENV: development
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_visual_only
+          NEXT_PUBLIC_TURNSTILE_TEST_BYPASS: "1"
+          TURNSTILE_DEV_BYPASS: "1"
+          NEXT_PUBLIC_SUPPORT_EMAIL: visual@example.invalid
+      - name: Capture UI
+        run: |
+          mkdir -p visual-review-v2
+          node <<'NODE'
+          const { chromium } = require("@playwright/test");
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            async function shot(name, viewport, route="/", action){
+              const page=await browser.newPage({viewport});
+              await page.goto(`http://127.0.0.1:3000${route}`,{waitUntil:"networkidle"});
+              if(action==="files") await page.getByRole("tab",{name:/^Files/i}).click();
+              if(action==="rewrite") await page.getByRole("tab",{name:/^Rewrite/i}).click();
+              await page.waitForTimeout(250);
+              await page.screenshot({path:`visual-review-v2/${name}.png`,fullPage:false});
+              await page.close();
+            }
+            await shot("home-desktop",{width:1440,height:900});
+            await shot("files-desktop",{width:1440,height:900},"/","files");
+            await shot("rewrite-desktop",{width:1440,height:900},"/","rewrite");
+            await shot("pricing-desktop",{width:1440,height:900},"/pricing");
+            await shot("home-mobile",{width:390,height:844});
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Commit screenshots
+        run: |
+          git config user.name "provenance-visual-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -f visual-review-v2/*.png
+          git commit -m "[visual-review-v2] screenshots"
+          git push origin HEAD:ui-visual-review-v2
