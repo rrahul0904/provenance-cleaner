@@ -100,6 +100,31 @@ jobs:
             await browser.close();
           })().catch(error => { console.error(error); process.exit(1); });
           NODE
+      - name: Build scaled visual review images
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const { chromium } = require("@playwright/test");
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            async function review(source, output, pageWidth, imageWidth) {
+              const data = fs.readFileSync(`visual-captures/${source}`).toString("base64");
+              const page = await browser.newPage({ viewport: { width: pageWidth, height: 900 } });
+              await page.setContent(`<!doctype html><style>
+                html,body{margin:0;background:white}img{display:block;width:${imageWidth}px;height:auto;margin:0 auto}
+              </style><img id="shot" src="data:image/jpeg;base64,${data}">`);
+              await page.locator("#shot").evaluate(img => img.decode());
+              await page.screenshot({ path: `visual-captures/${output}`, type: "jpeg", quality: 12, fullPage: true });
+              await page.close();
+            }
+            await review("home-desktop-fold.jpg", "review-home-desktop.jpg", 980, 960);
+            await review("workbench-files.jpg", "review-files.jpg", 980, 960);
+            await review("workbench-rewrite.jpg", "review-rewrite.jpg", 980, 960);
+            await review("pricing-desktop.jpg", "review-pricing.jpg", 980, 960);
+            await review("home-mobile.jpg", "review-home-mobile.jpg", 390, 390);
+            await browser.close();
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
       - name: Commit visual captures
         run: |
           git config user.name "provenance-visual-bot"
