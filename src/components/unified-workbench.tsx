@@ -14,9 +14,15 @@ const MODES: { id: Mode; label: string; description: string; anchor: string }[] 
 
 export function UnifiedWorkbench() {
   const [mode, setMode] = useState<Mode>("text");
-
+  const [mounted, setMounted] = useState<Set<Mode>>(() => new Set<Mode>(["text"]));
 
   function selectMode(next: typeof MODES[number]) {
+    setMounted(current => {
+      if (current.has(next.id)) return current;
+      const copy = new Set(current);
+      copy.add(next.id);
+      return copy;
+    });
     setMode(next.id);
     window.history.replaceState({}, "", `#${next.anchor}`);
   }
@@ -30,6 +36,7 @@ export function UnifiedWorkbench() {
           type="button"
           role="tab"
           aria-selected={mode === item.id}
+          aria-controls={`workspace-pane-${item.id}`}
           className={mode === item.id ? "active" : ""}
           onClick={() => selectMode(item)}
         >
@@ -42,10 +49,16 @@ export function UnifiedWorkbench() {
         <div><strong>Inspection is free</strong><small>Credits commit only after verified actions</small></div>
       </div>
     </div>
-    <div className="workspace-stage" role="tabpanel">
-      {mode === "text" && <ScannerWorkbench />}
-      {mode === "file" && <FileWorkbench />}
-      {mode === "rewrite" && <TransformWorkbench />}
+    <div className="workspace-stage">
+      <div id="workspace-pane-text" role="tabpanel" aria-labelledby="scanner" hidden={mode !== "text"}>
+        <ScannerWorkbench />
+      </div>
+      {mounted.has("file") && <div id="workspace-pane-file" role="tabpanel" aria-labelledby="files" hidden={mode !== "file"}>
+        <FileWorkbench />
+      </div>}
+      {mounted.has("rewrite") && <div id="workspace-pane-rewrite" role="tabpanel" aria-labelledby="editor" hidden={mode !== "rewrite"}>
+        <TransformWorkbench />
+      </div>}
     </div>
   </section>;
 }
