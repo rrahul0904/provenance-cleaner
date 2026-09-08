@@ -56,7 +56,7 @@ export function SubscriptionPlanGrid() {
         <span className="mono-label">MONTHLY PLAN</span>
         <strong>{plan.credits}<small> units / mo</small></strong>
         <h2>{plan.label}</h2>
-        <p>{`$${(plan.monthlyCents / 100).toFixed(2)} / month · ${plan.credits} credits each paid period · TEST mode`}</p>
+        <p>{`${(plan.monthlyCents / 100).toFixed(2)} / month · up to ~${plan.credits.toLocaleString()}K words of text processing · TEST mode`}</p>
         <div className="pack-unit">One-time processing packs remain available.</div>
         <button className="primary" type="button" disabled={!challengeToken || busyPlan !== null} onClick={() => void subscribe(plan.id)}>
           {busyPlan === plan.id ? "Opening Stripe…" : `Subscribe to ${plan.label}`}
