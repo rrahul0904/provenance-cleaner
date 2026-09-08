@@ -52,7 +52,7 @@ test("free TXT scan creates no guest and the first clean bills by source words",
   expect(sanitizeCalls).toBe(0);
 
   await expect(scanner.getByRole("button", { name: /Clean safe findings · 2 usage units/ })).toBeEnabled();
-  await scanner.getByRole("button", { name: /Clean safe findings · 2 credits/ }).click();
+  await scanner.getByRole("button", { name: /Clean safe findings · 2 usage units/ }).click();
   await expect(scanner.getByText(/2 credits charged · 0 remaining/)).toBeVisible();
   expect(guestCalls).toBe(1);
   expect(sanitizeCalls).toBe(1);
