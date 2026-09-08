@@ -212,7 +212,7 @@ export function ScannerWorkbench() {
     <div className="panel editor-panel">
       <div className="panel-heading">
         <div><p className="eyebrow">Free text scanner</p><h2>Inspect before you clean.</h2></div>
-        <span className="pill local-pill">local-first · 0 credits</span>
+        <span className="pill local-pill">Local inspection · free</span>
       </div>
 
       <div className="input-toolbar">
@@ -231,7 +231,7 @@ export function ScannerWorkbench() {
       <div className="actions primary-actions">
         <button className="primary" onClick={runScan} disabled={!canScan}>Scan text — free</button>
         <button className="secondary" onClick={() => void cleanConservatively()} disabled={!canScan || busy || !challengeToken}>
-          {busy ? "Cleaning…" : `Clean safe findings · ${estimatedCredits} credit${estimatedCredits === 1 ? "" : "s"}`}
+          {busy ? "Cleaning…" : `Clean safe findings · ${estimatedCredits} usage unit${estimatedCredits === 1 ? "" : "s"}`}
         </button>
         <button className="ghost" onClick={() => replaceText("")}>Clear</button>
       </div>
