@@ -40,7 +40,7 @@ test("semantic editor shows safe production errors", async ({ page }) => {
 
 test("in-flight transform locks source edits until the verified response completes", async ({ page }) => {
   await page.route("**/api/transform", async route => { const body = route.request().postDataJSON(); await new Promise(resolve => setTimeout(resolve, 300)); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) }).catch(() => undefined); });
-  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); const textarea = editor.locator("textarea"); await textarea.fill("This source sentence was written in 2026 and is long enough for editing."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(textarea).toBeDisabled(); await expect(editor.getByText("The revised statement keeps 2026 unchanged.")).toBeVisible(); await expect(textarea).toBeEnabled();
+  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); const textarea = editor.locator("textarea"); await textarea.fill("This source sentence was written in 2026 and is long enough for editing."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(textarea).toBeDisabled(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(textarea).toBeEnabled();
 });
 
 test("guest UX and Checkout do not mutate credits client-side", async ({ page }) => {
