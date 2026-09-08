@@ -18,17 +18,17 @@ test("DNT does not emit third-party analytics from the public workbench", async 
   expect(analyticsRequests).toEqual([]);
 });
 
-test("homepage explains the verification model without burying the workbench", async ({ page }) => {
+test("homepage makes the workbench primary and explains the operating model", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: /Inspect content.*Change only what you can verify/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open workbench" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "How verification works" })).toBeVisible();
-  const guarantees = page.locator(".product-status-grid");
-  await expect(guarantees.getByText("Local inspection", { exact: true })).toBeVisible();
-  await expect(guarantees.getByText("Conservative actions", { exact: true })).toBeVisible();
-  await expect(guarantees.getByText("Verified billing", { exact: true })).toBeVisible();
-  await expect(guarantees.getByText("Exportable evidence", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
+  const model = page.locator(".app-intro-meta");
+  await expect(model.getByText("INSPECT", { exact: true })).toBeVisible();
+  await expect(model.getByText("ACT", { exact: true })).toBeVisible();
+  await expect(model.getByText("VERIFY", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Verification model" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Usage & pricing" })).toBeVisible();
   await expect(page.getByRole("tab", { name: /^Text/i })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Provenance text scanner" })).toBeVisible();
 });
 
 test("source canary is not persisted in browser storage after a free scan", async ({ page }) => {
@@ -102,7 +102,7 @@ test("mobile navigation remains available and keyboard dismissible", async ({ pa
   const mobileNav = mobileContainer.getByRole("navigation", { name: "Mobile primary" });
   await expect(mobileNav).toBeVisible();
   await expect(mobileNav.getByRole("link", { name: /Workbench/ })).toBeVisible();
-  await expect(mobileContainer.getByRole("link", { name: "Start free scan" })).toBeVisible();
+  await expect(mobileContainer.getByRole("link", { name: "Open workspace" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toHaveAttribute("aria-label", "Open navigation");
