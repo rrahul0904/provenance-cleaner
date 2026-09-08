@@ -1,46 +1,44 @@
 import Link from "next/link";
 import { AccountBar } from "@/components/account-bar";
-import { FileWorkbench } from "@/components/file-workbench";
-import { HeroInspectionVisual, HeroWorkflowStrip, TerminalStatusCard, TrustBand, WorkflowStepper } from "@/components/quiet-forensics";
-import { ScannerWorkbench } from "@/components/scanner-workbench";
-import { TransformWorkbench } from "@/components/transform-workbench";
+import { UnifiedWorkbench } from "@/components/unified-workbench";
 
 export default function Home() {
-  return <main id="main-content">
-    <section className="hero shell">
-      <div className="hero-copy">
-        <p className="eyebrow">Privacy-first content integrity</p>
-        <h1>See what your content is carrying.</h1>
-        <p className="lede">Inspect hidden Unicode, file metadata, provenance signals, and AI-edited prose — then clean only what is safe and keep a receipt of what changed.</p>
-        <div className="hero-actions">
-          <Link className="primary-link" href="#scanner">Start free inspection</Link>
-          <Link className="secondary-link" href="#receipt-preview">See a verification receipt</Link>
+  return <main id="main-content" className="product-home">
+    <section className="shell product-intro">
+      <div className="product-intro-copy">
+        <div className="product-kicker"><span className="status-dot"/>Content integrity workbench</div>
+        <h1>Inspect content.<br/>Change only what you can verify.</h1>
+        <p>Find hidden Unicode, metadata, provenance, and semantic-edit risks. Clean narrowly, preserve signed evidence, and keep a receipt of every successful action.</p>
+        <div className="product-intro-actions">
+          <Link className="primary-link" href="#workbench">Open workbench</Link>
+          <Link className="secondary-link" href="/how-it-works">How verification works</Link>
         </div>
-        <div className="hero-trust-cue"><span className="status-dot" /><strong>Local-first inspection.</strong><span>Billable actions commit credits only after verified successful work.</span></div>
-        <HeroWorkflowStrip />
-        <div className="hero-badges"><span>Local-first inspection</span><span>Conservative actions</span><span>Auditable credits</span><span>Exportable evidence</span></div>
-        <TerminalStatusCard />
       </div>
-      <HeroInspectionVisual />
+      <div className="product-status-grid" aria-label="Product guarantees">
+        <div><span>01</span><strong>Local inspection</strong><p>Text and supported metadata inspection starts in your browser.</p></div>
+        <div><span>02</span><strong>Conservative actions</strong><p>Signed provenance and review-only findings are never silently removed.</p></div>
+        <div><span>03</span><strong>Verified billing</strong><p>Credits are committed only after a successful validated operation.</p></div>
+        <div><span>04</span><strong>Exportable evidence</strong><p>Receipts capture outcomes, hashes, checks, and authoritative credit state.</p></div>
+      </div>
     </section>
 
-    <WorkflowStepper />
     <AccountBar />
 
-    <section id="workbench" className="workbench-intro shell">
-      <div><p className="eyebrow">Content integrity workbench</p><h2>Three tools. One evidence model.</h2></div>
-      <p>Use the input that matches your content. Each workbench separates the outcome from the technical evidence so you can understand the result first, then inspect exactly what happened.</p>
+    <section className="shell workspace-heading">
+      <div>
+        <p className="eyebrow">Workbench</p>
+        <h2>One surface for inspection, sanitation, and protected editing.</h2>
+      </div>
+      <p>Switch modes without leaving the page. Results stay evidence-first: outcome up front, technical detail when you need it.</p>
     </section>
 
-    <div id="scanner" className="shell module-anchor"><span className="module-index">A · TEXT SCANNER</span><ScannerWorkbench /></div>
-    <div id="files" className="shell module-anchor"><span className="module-index">B · FILE PROVENANCE</span><FileWorkbench /></div>
-    <div id="editor" className="shell module-anchor"><span className="module-index">C · PROTECTED EDITOR</span><TransformWorkbench /></div>
+    <div className="shell"><UnifiedWorkbench /></div>
 
-    <TrustBand />
-    <section id="principles" className="principles shell">
-      <div><span>01</span><h3>Inspect first</h3><p>Findings stay concrete: exact code points, metadata categories, hashes, and provenance validation states.</p></div>
-      <div><span>02</span><h3>Preserve meaning</h3><p>Language-sensitive controls, factual spans, and signed provenance are not silently destroyed for a prettier output.</p></div>
-      <div><span>03</span><h3>Fail safely</h3><p>Billable actions reserve credits, validate outcomes, and commit only after verified successful work.</p></div>
+    <section className="shell product-proof-strip" aria-label="Trust model">
+      <div><span>LOCAL</span><strong>Inspect before sending</strong></div>
+      <div><span>NARROW</span><strong>Remove only justified signals</strong></div>
+      <div><span>VERIFY</span><strong>Re-check returned output</strong></div>
+      <div><span>RECEIPT</span><strong>Keep an auditable record</strong></div>
     </section>
   </main>;
 }
