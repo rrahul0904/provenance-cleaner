@@ -1,0 +1,78 @@
+name: visual-capture
+
+on:
+  push:
+    branches: [ui-visual-capture]
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    if: ${{ !contains(github.event.head_commit.message, '[visual-capture]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Start app
+        run: |
+          npm run dev -- --hostname 127.0.0.1 > /tmp/provenance-ui.log 2>&1 &
+          echo $! > /tmp/provenance-ui.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/provenance-ui.log
+          exit 1
+        env:
+          NODE_ENV: development
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_visual_only
+          NEXT_PUBLIC_TURNSTILE_TEST_BYPASS: "1"
+          TURNSTILE_DEV_BYPASS: "1"
+          NEXT_PUBLIC_SUPPORT_EMAIL: visual@example.invalid
+      - name: Capture rendered UI
+        run: |
+          mkdir -p visual-captures
+          node <<'NODE'
+          const { chromium } = require("@playwright/test");
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            async function capture(name, viewport, route = "/", action) {
+              const page = await browser.newPage({ viewport });
+              await page.goto(`http://127.0.0.1:3000${route}`, { waitUntil: "networkidle" });
+              if (action === "files") {
+                await page.getByRole("tab", { name: /^Files/i }).click();
+                await page.getByRole("region", { name: "File metadata scanner" }).scrollIntoViewIfNeeded();
+              }
+              if (action === "rewrite") {
+                await page.getByRole("tab", { name: /^Rewrite/i }).click();
+                await page.getByRole("region", { name: "Semantics-preserving editor" }).scrollIntoViewIfNeeded();
+              }
+              if (action === "pricing") {
+                await page.getByText("Monthly · Stripe TEST", { exact: true }).scrollIntoViewIfNeeded();
+              }
+              await page.waitForTimeout(300);
+              await page.screenshot({ path: `visual-captures/${name}.jpg`, type: "jpeg", quality: 38, fullPage: false });
+              await page.close();
+            }
+            await capture("home-desktop-fold", { width: 1440, height: 900 });
+            await capture("workbench-files", { width: 1440, height: 900 }, "/", "files");
+            await capture("workbench-rewrite", { width: 1440, height: 900 }, "/", "rewrite");
+            await capture("pricing-desktop", { width: 1440, height: 900 }, "/pricing", "pricing");
+            await capture("home-mobile", { width: 390, height: 844 });
+            await browser.close();
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+      - name: Commit visual captures
+        run: |
+          git config user.name "provenance-visual-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -f visual-captures/*.jpg
+          git commit -m "[visual-capture] rendered UI screenshots"
+          git push origin HEAD:ui-visual-capture
