@@ -41,6 +41,7 @@ export function UnifiedWorkbench() {
           role="tab"
           aria-selected={mode === item.id}
           aria-controls={`workspace-pane-${item.id}`}
+          aria-label={`${item.short} — ${item.description}`}
           className={mode === item.id ? "active" : ""}
           onClick={() => selectMode(item)}
         >
