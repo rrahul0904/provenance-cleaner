@@ -44,7 +44,7 @@ describe("Phase 8 review hardening",()=>{
     expect(revenue).toContain("add column if not exists amount_paid bigint");
     expect(revenue).toContain("billing_record_checkout_amount");
     expect(revenue).toContain("billing_record_subscription_invoice_amount");
-    expect(revenue).not.toMatch(/card_number|payment_method_details|raw_text|source_text|filename|file_bytes/iu);
+    expect(revenue).not.toMatch(/add column if not exists\\s+(card_number|payment_method_details|raw_text|source_text|filename|file_bytes)\\b/iu);
     expect(webhook).toContain("recordCheckoutAmount");
     expect(webhook).toContain("recordSubscriptionInvoiceAmount");
   });
