@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { completeCheckoutPurchase, expireCheckoutPurchase, grantSubscriptionInvoice, linkStripeCustomer, recordPolicyRefund, upsertSubscription } from "@/lib/billing/server";
+import { completeCheckoutPurchase, expireCheckoutPurchase, grantSubscriptionInvoice, linkStripeCustomer, recordCheckoutAmount, recordPolicyRefund, recordSubscriptionInvoiceAmount, upsertSubscription } from "@/lib/billing/server";
 import { subscriptionGrantForPaidLine, subscriptionPlanFromPrice } from "@/lib/billing/subscriptions";
 import { getStripe } from "@/lib/billing/stripe";
 import { apiError, apiOk, requestContext } from "@/lib/server/api";
@@ -11,9 +11,9 @@ function purchaseId(session:Stripe.Checkout.Session){return session.mode==="subs
 function checkoutCountry(session:Stripe.Checkout.Session){return session.collected_information?.shipping_details?.address?.country??session.customer_details?.address?.country??null;}
 function object(value:unknown){return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};}
 function stripeId(value:unknown){if(typeof value==="string")return value;const candidate=object(value);return typeof candidate.id==="string"?candidate.id:null;}
-function unixDate(value: number | null | undefined){return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1_000).toISOString() : null;}
-function subscriptionPriceId(subscription: Stripe.Subscription){const first=subscription.items.data[0];return first?.price?.id??null;}
-async function reconcileSubscription(event:Stripe.Event, subscription:Stripe.Subscription){
+function unixDate(value:number|null|undefined){return typeof value==="number"&&Number.isFinite(value)?new Date(value*1_000).toISOString():null;}
+function subscriptionPriceId(subscription:Stripe.Subscription){const first=subscription.items.data[0];return first?.price?.id??null;}
+async function reconcileSubscription(event:Stripe.Event,subscription:Stripe.Subscription){
   const userId=subscription.metadata?.user_id;
   const customerId=stripeId(subscription.customer);const priceId=subscriptionPriceId(subscription);const planId=subscriptionPlanFromPrice(priceId);
   if(!userId||!customerId||!priceId||!planId)return;
@@ -39,7 +39,7 @@ function invoiceLineQuantity(line:Stripe.InvoiceLineItem){
   const candidate=Number((line as unknown as {quantity_decimal?:unknown}).quantity_decimal);
   return Number.isFinite(candidate)?candidate:null;
 }
-async function reconcileSubscriptionInvoice(event:Stripe.Event, invoice:Stripe.Invoice){
+async function reconcileSubscriptionInvoice(event:Stripe.Event,invoice:Stripe.Invoice){
   const customerId=stripeId(invoice.customer);const subscriptionId=stripeId(invoice.parent?.subscription_details?.subscription??null);
   if(!customerId||!subscriptionId||!invoice.id)return;
   const candidates=invoice.lines.data.filter((line)=>invoiceLineSubscriptionId(line)===subscriptionId&&!invoiceLineIsProration(line));
@@ -49,18 +49,20 @@ async function reconcileSubscriptionInvoice(event:Stripe.Event, invoice:Stripe.I
   const line=recognized[0];const priceId=invoiceLinePriceId(line);const quantity=invoiceLineQuantity(line);
   const grant=subscriptionGrantForPaidLine(priceId,quantity);
   if(!grant)throw new Error("invalid_subscription_invoice_line");
+  if(typeof invoice.amount_paid!=="number"||!invoice.currency)throw new Error("missing_subscription_invoice_amount");
   await grantSubscriptionInvoice({eventId:event.id,eventType:event.type,invoiceId:invoice.id,customerId,subscriptionId,priceId:grant.priceId,planId:grant.planId,quantity:grant.quantity,credits:grant.credits,periodStart:unixDate(line.period?.start),periodEnd:unixDate(line.period?.end)});
+  await recordSubscriptionInvoiceAmount({invoiceId:invoice.id,amount:invoice.amount_paid,currency:invoice.currency});
 }
 
 async function ensurePaymentDetails(session:Stripe.Checkout.Session){
-  if(session.amount_total&&session.currency&&session.payment_intent)return session;
+  if(session.amount_total!==null&&session.currency&&session.payment_intent)return session;
   return getStripe().checkout.sessions.retrieve(session.id,{expand:["payment_intent"]});
 }
 async function fullPolicyRefund(event:Stripe.Event,session:Stripe.Checkout.Session,purchase:string,reason:"country_policy"|"account_deleted"){
   const resolved=await ensurePaymentDetails(session);
   const intent=resolved.payment_intent;
   const paymentIntentId=typeof intent==="string"?intent:(intent as Stripe.PaymentIntent|null)?.id;
-  if(!paymentIntentId||!resolved.amount_total||!resolved.currency)throw new Error("missing_payment_for_policy_refund");
+  if(!paymentIntentId||resolved.amount_total===null||!resolved.currency)throw new Error("missing_payment_for_policy_refund");
   const refund=await getStripe().refunds.create({payment_intent:paymentIntentId,amount:resolved.amount_total,reason:"requested_by_customer",metadata:{purchase_id:purchase,policy_reason:reason}},{idempotencyKey:`policy-refund:${reason}:${resolved.id}`});
   await recordPolicyRefund({eventId:event.id,eventType:event.type,purchaseId:purchase,refundId:refund.id,amount:refund.amount,currency:refund.currency,reason});
   return refund;
@@ -89,7 +91,9 @@ export async function POST(request:Request){
           logEvent("checkout_country_refunded",{requestId:context.requestId,stripeEventId:event.id,purchaseId:id,country:country??"unknown",refundId:refund.id});
           return apiOk(context,{received:true,credited:false,refunded:true,reason:"country_not_supported"});
         }
+        if(typeof session.amount_total!=="number"||!session.currency)throw new Error("missing_checkout_amount");
         const result=object(await completeCheckoutPurchase(event.id,event.type,id,session.id));
+        await recordCheckoutAmount({purchaseId:id,sessionId:session.id,amount:session.amount_total,currency:session.currency});
         if(result.requires_refund===true){
           const refund=await fullPolicyRefund(event,session,id,"account_deleted");
           logEvent("checkout_deleted_account_refunded",{requestId:context.requestId,stripeEventId:event.id,purchaseId:id,refundId:refund.id});
