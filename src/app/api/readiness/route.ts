@@ -39,18 +39,21 @@ export async function GET(request: Request) {
     const { data, error } = await createAdminClient().rpc("ops_admin_status");
     if (!error) adminStatus = record(data);
   } catch { adminStatus = null; }
-  const adminOwnerReady = adminStatus?.ownerConfigured === true;
+  const adminOwnerProvisioned = adminStatus?.ownerConfigured === true;
+  const adminBootstrapConfigured = env.checks.adminOwnerBootstrap?.configured === true;
+  const adminReady = adminOwnerProvisioned || adminBootstrapConfigured;
 
   const checks = {
     ...env.checks,
-    adminOwner: { configured: adminOwnerReady, required: true },
+    adminOwner: { configured: adminReady, required: true },
+    adminOwnerProvisioned: { configured: adminOwnerProvisioned, required: false },
     phase6Schema: { configured: phase6Ready, required: true },
     phase7Schema: { configured: phase7Ready, required: true },
     phase8Schema: { configured: phase8Ready, required: true },
   };
   const missing = [
     ...env.missing,
-    ...(adminOwnerReady ? [] : ["adminOwner"]),
+    ...(adminReady ? [] : ["adminOwner"]),
     ...(phase6Ready ? [] : ["phase6Schema"]),
     ...(phase7Ready ? [] : ["phase7Schema"]),
     ...(phase8Ready ? [] : ["phase8Schema"]),
@@ -80,8 +83,9 @@ export async function GET(request: Request) {
       legacyRefundUpgrade: phase8.legacyRefundUpgrade,
     } : null,
     admin: {
-      ready: adminOwnerReady,
-      ownerConfigured: adminOwnerReady,
+      ready: adminReady,
+      ownerConfigured: adminOwnerProvisioned,
+      bootstrapConfigured: adminBootstrapConfigured,
     },
   }, ready ? 200 : 503, { "cache-control": "no-store" });
 }
