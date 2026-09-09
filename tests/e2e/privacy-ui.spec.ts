@@ -18,16 +18,17 @@ test("DNT does not emit third-party analytics from the public workbench", async 
   expect(analyticsRequests).toEqual([]);
 });
 
-test("homepage explains the evidence loop within the hero", async ({ page }) => {
+test("homepage makes the workbench primary and explains the operating model", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "See what your content is carrying." })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Start free inspection" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "See a verification receipt" })).toBeVisible();
-  const hero = page.locator(".hero");
-  await expect(hero.getByText("Drop content", { exact: true })).toBeVisible();
-  await expect(hero.getByText("See hidden signals", { exact: true })).toBeVisible();
-  await expect(hero.getByText("Clean safely", { exact: true })).toBeVisible();
-  await expect(hero.getByText("Get proof", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
+  const model = page.locator(".app-intro-meta");
+  await expect(model.getByText("INSPECT", { exact: true })).toBeVisible();
+  await expect(model.getByText("ACT", { exact: true })).toBeVisible();
+  await expect(model.getByText("VERIFY", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Verification model" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Usage & pricing" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /^Text/i })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Provenance text scanner" })).toBeVisible();
 });
 
 test("source canary is not persisted in browser storage after a free scan", async ({ page }) => {
@@ -101,7 +102,7 @@ test("mobile navigation remains available and keyboard dismissible", async ({ pa
   const mobileNav = mobileContainer.getByRole("navigation", { name: "Mobile primary" });
   await expect(mobileNav).toBeVisible();
   await expect(mobileNav.getByRole("link", { name: /Workbench/ })).toBeVisible();
-  await expect(mobileContainer.getByRole("link", { name: "Start free scan" })).toBeVisible();
+  await expect(mobileContainer.getByRole("link", { name: "Open workspace" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toHaveAttribute("aria-label", "Open navigation");
@@ -152,14 +153,24 @@ test("public surfaces have main landmarks and no horizontal overflow across laun
   }
 });
 
-test("core workbench is keyboard reachable and exposes accessible async regions", async ({ page }) => {
+test("core workbench is keyboard reachable and exposes accessible async regions across tabs", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("region", { name: "Account and credits" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Provenance text scanner" })).toBeVisible();
+
+  const filesTab = page.getByRole("tab", { name: /^Files/i });
+  await filesTab.click();
+  await expect(filesTab).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("region", { name: "File metadata scanner" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Semantics-preserving editor" })).toBeVisible();
+
+  const rewriteTab = page.getByRole("tab", { name: /^Rewrite/i });
+  await rewriteTab.click();
+  await expect(rewriteTab).toHaveAttribute("aria-selected", "true");
+  const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('[aria-live="polite"]')).toHaveCount(1);
+
   await page.keyboard.press("Tab");
   const focused = await page.evaluate(() => document.activeElement?.tagName ?? null);
   expect(focused).not.toBe("BODY");
-  await expect(page.getByRole("region", { name: "Semantics-preserving editor" }).locator('[aria-live="polite"]')).toHaveCount(1);
 });

@@ -3,7 +3,15 @@ import { expect, test } from "@playwright/test";
 function pngChunk(type: string, data: Uint8Array = Buffer.alloc(0)) { const typeBytes = Buffer.from(type, "ascii"); const length = Buffer.alloc(4); length.writeUInt32BE(data.length); return Buffer.concat([length, typeBytes, data, Buffer.alloc(4)]); }
 function pngWith(type: string, data: Uint8Array) { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk(type, data), pngChunk("IEND")]); }
 function cleanPng() { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk("IEND")]); }
-async function open(page: import("@playwright/test").Page) { await page.goto("/"); await expect(page.getByRole("heading", { name: /See what your content is carrying/i })).toBeVisible(); }
+async function open(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
+}
+async function selectMode(page: import("@playwright/test").Page, mode: "Text" | "Files" | "Rewrite") {
+  const tab = page.getByRole("tab", { name: new RegExp(`^${mode}`, "i") });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+}
 async function mockGuestPromo(page: import("@playwright/test").Page, available = 2) { await page.route("**/api/auth/anonymous", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ userId: "00000000-0000-4000-8000-000000000010", isAnonymous: true, balance: { settled: available, held: 0, available }, guestPromoGranted: true, requestId: "guest-e2e" }) })); }
 
 function mockTransformResult(body: { operationId: string; mode: string }) {
@@ -18,25 +26,60 @@ test("free Unicode scan stays local while conservative cleaning is billable", as
 
 test("file metadata cleaning is server-authoritative and provenance blocks destructive action", async ({ page }) => {
   await mockGuestPromo(page, 2); await page.route("**/api/files/sanitize", async route => { expect(route.request().headers()["x-file-name"]).toContain("metadata.png"); await route.fulfill({ status: 200, body: cleanPng(), headers: { "content-type": "image/png", "x-output-file-name": encodeURIComponent("metadata.clean.png"), "x-credits-charged": "1", "x-balance-after": "1", "x-input-kind": "png", "x-removed-count": "1" } }); });
-  await open(page); const fileRegion = page.getByRole("region", { name: "File metadata scanner" }); const input = fileRegion.locator('input[type="file"]'); await input.setInputFiles({ name: "metadata.png", mimeType: "image/png", buffer: pngWith("tEXt", Buffer.from("Author\0Example")) }); await fileRegion.getByRole("button", { name: "Inspect file" }).click(); await expect(fileRegion.getByText(/metadata finding/)).toBeVisible(); await fileRegion.getByRole("button", { name: /Sanitize privacy metadata/ }).click(); await expect(fileRegion.getByText("Before / after metadata")).toBeVisible(); await expect(fileRegion.getByText(/1 credit charged · 1 remaining/)).toBeVisible(); await input.setInputFiles({ name: "signed.png", mimeType: "image/png", buffer: pngWith("caBX", Buffer.from("provenance")) }); await fileRegion.getByRole("button", { name: "Inspect file" }).click(); await expect(fileRegion.getByRole("button", { name: "Sanitization blocked" })).toBeDisabled();
+  await open(page); await selectMode(page, "Files"); const fileRegion = page.getByRole("region", { name: "File metadata scanner" }); const input = fileRegion.locator('input[type="file"]'); await input.setInputFiles({ name: "metadata.png", mimeType: "image/png", buffer: pngWith("tEXt", Buffer.from("Author\0Example")) }); await fileRegion.getByRole("button", { name: "Inspect file" }).click(); await expect(fileRegion.getByText(/metadata finding/)).toBeVisible(); await fileRegion.getByRole("button", { name: /Sanitize privacy metadata/ }).click(); await expect(fileRegion.getByText("Before / after metadata")).toBeVisible(); await expect(fileRegion.getByText(/1 credit charged · 1 remaining/)).toBeVisible(); await input.setInputFiles({ name: "signed.png", mimeType: "image/png", buffer: pngWith("caBX", Buffer.from("provenance")) }); await fileRegion.getByRole("button", { name: "Inspect file" }).click(); await expect(fileRegion.getByRole("button", { name: "Sanitization blocked" })).toBeDisabled();
 });
 
 test("semantic editor surfaces validated mock output without a real model call", async ({ page }) => {
   await page.route("**/api/transform", async route => { const body = route.request().postDataJSON(); expect(body.challengeToken).toBe("dev-bypass"); expect(body.mode).toBe("parity"); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) }); });
-  await open(page); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical."); await expect(editor.getByTestId("turnstile-bypass")).toBeVisible(); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(editor.getByText("1 credit committed", { exact: true })).toBeVisible(); await expect(editor.getByText(/Text-watermark verifier: unavailable/)).toBeVisible();
+  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical."); await expect(editor.getByTestId("turnstile-bypass")).toBeVisible(); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(editor.getByText("1 unit committed", { exact: true })).toBeVisible(); await expect(editor.getByText(/Text-watermark verifier: unavailable/)).toBeVisible();
 });
 
 test("semantic editor shows safe production errors", async ({ page }) => {
-  await page.route("**/api/transform", route => route.fulfill({ status: 402, contentType: "application/json", body: JSON.stringify({ error: { code: "insufficient_credits", message: "Not enough credits are available for this edit.", requestId: "e2e" } }) })); await open(page); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This is a sufficiently long editing request that should trigger the mocked API."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.getByText("Not enough credits are available for this edit.")).toBeVisible();
+  await page.route("**/api/transform", route => route.fulfill({ status: 402, contentType: "application/json", body: JSON.stringify({ error: { code: "insufficient_credits", message: "Not enough credits are available for this edit.", requestId: "e2e" } }) })); await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This is a sufficiently long editing request that should trigger the mocked API."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.getByText("Not enough credits are available for this edit.")).toBeVisible();
 });
 
-test("stale transform responses cannot replace newer source text", async ({ page }) => {
+test("in-flight transform locks source edits until the verified response completes", async ({ page }) => {
   await page.route("**/api/transform", async route => { const body = route.request().postDataJSON(); await new Promise(resolve => setTimeout(resolve, 300)); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) }).catch(() => undefined); });
-  await open(page); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); const textarea = editor.locator("textarea"); await textarea.fill("This source sentence was written in 2026 and is long enough for editing."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await textarea.fill("A newer source replaced the original before the response completed successfully."); await expect(editor.getByText("The revised statement keeps 2026 unchanged.")).toHaveCount(0);
+  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); const textarea = editor.locator("textarea"); await textarea.fill("This source sentence was written in 2026 and is long enough for editing."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(textarea).toBeDisabled(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(textarea).toBeEnabled();
+});
+
+
+test("paid rewrite result survives switching away from and back to the workbench tab", async ({ page }) => {
+  await page.route("**/api/transform", async route => {
+    const body = route.request().postDataJSON();
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) });
+  });
+  await open(page);
+  await selectMode(page, "Rewrite");
+  const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
+  await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical.");
+  await editor.getByRole("button", { name: /Edit for parity/i }).click();
+  await selectMode(page, "Text");
+  await page.waitForTimeout(350);
+  await selectMode(page, "Rewrite");
+  await expect(page.getByRole("region", { name: "Semantics-preserving editor" }).locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged.");
+});
+
+test("pricing pack buttons invoke one-time checkout directly instead of routing through account", async ({ page }) => {
+  let checkoutCalls = 0;
+  await page.route("**/api/billing/checkout", async route => {
+    checkoutCalls += 1;
+    const body = route.request().postDataJSON();
+    expect(body.packId).toBe("starter");
+    expect(body.challengeToken).toBe("dev-bypass");
+    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "checkout_unavailable", message: "Checkout is not available.", requestId: "pricing-e2e" } }) });
+  });
+  await page.goto("/pricing");
+  const starter = page.getByRole("button", { name: "Buy Starter" });
+  await expect(starter).toBeEnabled();
+  await starter.click();
+  await expect(page.getByText("Checkout is not available.", { exact: true })).toBeVisible();
+  expect(checkoutCalls).toBe(1);
 });
 
 test("guest UX and Checkout do not mutate credits client-side", async ({ page }) => {
-  await mockGuestPromo(page, 5); await page.route("**/api/billing/checkout", async route => { const body = route.request().postDataJSON(); expect(body.packId).toBe("starter"); expect(body.challengeToken).toBe("dev-bypass"); await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "checkout_unavailable", message: "Checkout is not available.", requestId: "checkout-e2e" } }) }); }); await open(page); const account = page.getByRole("region", { name: "Account and credits" }); await account.getByRole("button", { name: /Start guest/ }).click(); await expect(account.getByText("Guest session")).toBeVisible(); await expect(account.getByText(/5 available credits/)).toBeVisible(); await account.getByRole("button", { name: /\+10 · \$4\.99/ }).click(); await expect(account.getByText("Checkout is not available.")).toBeVisible(); await expect(account.getByText(/5 available credits/)).toBeVisible();
+  await mockGuestPromo(page, 5); await page.route("**/api/billing/checkout", async route => { const body = route.request().postDataJSON(); expect(body.packId).toBe("starter"); expect(body.challengeToken).toBe("dev-bypass"); await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { code: "checkout_unavailable", message: "Checkout is not available.", requestId: "checkout-e2e" } }) }); }); await open(page); const account = page.getByRole("region", { name: "Account and credits" }); await account.getByRole("button", { name: /Start guest/ }).click(); await expect(account.getByText("Guest session")).toBeVisible(); await expect(account.getByText(/5 available/)).toBeVisible(); await account.getByRole("button", { name: /\+10 · \$4\.99/ }).click(); await expect(account.getByText("Checkout is not available.")).toBeVisible(); await expect(account.getByText(/5 available/)).toBeVisible();
 });
 
 test("security headers and readiness expose no secrets", async ({ request }) => { const health = await request.get("/api/health"); expect(health.ok()).toBeTruthy(); expect(health.headers()["x-content-type-options"]).toBe("nosniff"); expect(health.headers()["content-security-policy"]).toContain("wasm-unsafe-eval"); expect(health.headers()["content-security-policy"]).toContain("challenges.cloudflare.com"); const readiness = await request.get("/api/readiness"); expect([200, 503]).toContain(readiness.status()); const text = await readiness.text(); expect(text).not.toContain("STRIPE_SECRET_KEY"); expect(text).not.toContain("SUPABASE_SECRET_KEY"); });

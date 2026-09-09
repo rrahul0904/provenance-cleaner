@@ -6,6 +6,7 @@ import "./quiet-forensics.css";
 import "./quiet-forensics-refinement.css";
 import "./account-forensics.css";
 import "./admin-forensics.css";
+import "./product-shell.css";
 
 export const metadata: Metadata = {
   title: "Provenance Cleaner — Content integrity workbench",

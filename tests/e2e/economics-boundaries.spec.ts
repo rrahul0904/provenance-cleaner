@@ -14,7 +14,12 @@ function pngOfSize(size: number) {
 
 async function open(page: import("@playwright/test").Page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /See what your content is carrying/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
+}
+async function selectMode(page: import("@playwright/test").Page, mode: "Files" | "Rewrite") {
+  const tab = page.getByRole("tab", { name: new RegExp(`^${mode}`, "i") });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
 test("free TXT scan creates no guest and the first clean bills by source words", async ({ page }) => {
@@ -46,8 +51,8 @@ test("free TXT scan creates no guest and the first clean bills by source words",
   expect(guestCalls).toBe(0);
   expect(sanitizeCalls).toBe(0);
 
-  await expect(scanner.getByRole("button", { name: /Clean safe findings · 2 credits/ })).toBeEnabled();
-  await scanner.getByRole("button", { name: /Clean safe findings · 2 credits/ }).click();
+  await expect(scanner.getByRole("button", { name: /Clean safe findings · 2 usage units/ })).toBeEnabled();
+  await scanner.getByRole("button", { name: /Clean safe findings · 2 usage units/ }).click();
   await expect(scanner.getByText(/2 credits charged · 0 remaining/)).toBeVisible();
   expect(guestCalls).toBe(1);
   expect(sanitizeCalls).toBe(1);
@@ -57,6 +62,7 @@ test("file inspection accepts exactly the 3.2 MiB contract boundary and rejects 
   let guestCalls = 0;
   await page.route("**/api/auth/anonymous", route => { guestCalls += 1; return route.abort(); });
   await open(page);
+  await selectMode(page, "Files");
   const region = page.getByRole("region", { name: "File metadata scanner" });
   const input = region.locator('input[type="file"]');
 
@@ -76,6 +82,7 @@ test("rewrite UI enforces 7,999 / 8,000 / 8,001 words and whitespace before any 
   let transformCalls = 0;
   await page.route("**/api/transform", route => { transformCalls += 1; return route.abort(); });
   await open(page);
+  await selectMode(page, "Rewrite");
   const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
   const textarea = editor.locator("textarea");
   const button = editor.getByRole("button", { name: /Edit for parity/i });

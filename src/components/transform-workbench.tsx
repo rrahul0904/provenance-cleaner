@@ -157,7 +157,7 @@ export function TransformWorkbench() {
         <h2>Edit the prose. Keep the facts.</h2>
         <p>This is preservation-first semantic editing with deterministic checks—not a claim of authorship or detector evasion. Parity mode uses the tightest wording and length contract.</p>
       </div>
-      <span className="pill ai-pill">~{estimatedCredits} credit{estimatedCredits === 1 ? "" : "s"}</span>
+      <span className="pill ai-pill">~{estimatedCredits} usage unit{estimatedCredits === 1 ? "" : "s"}</span>
     </div>
 
     <div className="transform-grid">
@@ -198,7 +198,7 @@ export function TransformWorkbench() {
 
         <div className="editor-readiness">
           <span><strong>{words.toLocaleString()}</strong> words</span>
-          <span><strong>~{estimatedCredits}</strong> credits</span>
+          <span><strong>~{estimatedCredits}</strong> usage units</span>
           <span><strong>{challengeToken ? "ready" : "required"}</strong> bot verification</span>
           <span><strong>deterministic</strong> preservation</span>
         </div>
@@ -228,7 +228,7 @@ export function TransformWorkbench() {
         </div>
 
         {!result ? <div className="empty-state compact">
-          <div><span className="empty-symbol">≋</span><strong>Output waits for evidence</strong><p>Run an edit to see revised prose, a restrained semantic diff, protected facts, and the committed credit receipt.</p></div>
+          <div><span className="empty-symbol">≋</span><strong>Output waits for evidence</strong><p>Run an edit to see revised prose, a restrained semantic diff, protected facts, and the committed usage receipt.</p></div>
         </div> : <>
           <div className="result-summary-card semantic-result-summary">
             <div><span>Outcome</span><strong>Edit passed preservation checks</strong></div>
@@ -267,12 +267,12 @@ export function TransformWorkbench() {
           </div>
 
           {result.billing && <div className="verification-box billing-receipt">
-            <strong>Credit state</strong>
-            <div className="credit-state-timeline" aria-label="Credit hold timeline">
+            <strong>Usage state</strong>
+            <div className="credit-state-timeline" aria-label="Usage hold timeline">
               <span className="done">reserved</span><i aria-hidden="true">→</i><span className="done">verified</span><i aria-hidden="true">→</i><span className="done">committed</span>
             </div>
             <div className="verification-stats">
-              <span>{result.billing.creditsCharged} credit{result.billing.creditsCharged === 1 ? "" : "s"} committed</span>
+              <span>{result.billing.creditsCharged} unit{result.billing.creditsCharged === 1 ? "" : "s"} committed</span>
               <span>{result.billing.balanceAfter} remaining</span>
               <span className="mono-label">operation {result.billing.operationId.slice(0, 8)}</span>
             </div>
