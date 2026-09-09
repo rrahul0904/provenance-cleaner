@@ -3,8 +3,8 @@ const DEFAULT_SUPABASE_URL = "https://cikxzxxreryycfjumwsd.supabase.co";
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Jsa3NElnKfCPiXMes-CrXg_hthFy4r1";
 const CONTROLLED_LAUNCH_TEST_PRICE_IDS = ["price_1UAXO6RB8OGmEnBwqpc4DaLs", "price_1UAXOFRB8OGmEnBwlAwgU1GS", "price_1UAXOQRB8OGmEnBwANqar75f"];
 const CONTROLLED_LAUNCH_TEST_SUBSCRIPTION_PRICE_IDS = ["price_1UBmgJRB8OGmEnBwoUtRmBKb", "price_1UBmhIRB8OGmEnBwFEJNV4zF", "price_1UBmiARB8OGmEnBwgoMzZqbw"];
-const SUPPORT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
-const PLACEHOLDER_SUPPORT_EMAIL = /(^|@)(example\.(com|invalid|org)|invalid|localhost)$|placeholder/iu;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const PLACEHOLDER_EMAIL = /(^|@)(example\.(com|invalid|org)|invalid|localhost)$|placeholder/iu;
 
 function isVercelPreview() { return process.env.VERCEL_ENV === "preview"; }
 function vercelOrigin() {
@@ -17,11 +17,14 @@ function hasOidc(request?: Request) {
   return Boolean(process.env.VERCEL_OIDC_TOKEN?.trim() || request?.headers.get("x-vercel-oidc-token")?.trim());
 }
 
-export function isDevelopmentTurnstileBypass() { return process.env.NODE_ENV !== "production" && process.env.TURNSTILE_DEV_BYPASS === "1"; }
-export function isConfiguredSupportEmail(value: string | undefined) {
+function isConfiguredOperationalEmail(value: string | undefined) {
   const email = value?.trim() ?? "";
-  return SUPPORT_EMAIL_PATTERN.test(email) && !PLACEHOLDER_SUPPORT_EMAIL.test(email);
+  return EMAIL_PATTERN.test(email) && !PLACEHOLDER_EMAIL.test(email);
 }
+
+export function isDevelopmentTurnstileBypass() { return process.env.NODE_ENV !== "production" && process.env.TURNSTILE_DEV_BYPASS === "1"; }
+export function isConfiguredSupportEmail(value: string | undefined) { return isConfiguredOperationalEmail(value); }
+export function isConfiguredAdminOwnerEmail(value: string | undefined) { return isConfiguredOperationalEmail(value); }
 export function publicAppOrigin(request?: Request) {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
   const candidate = configured || vercelOrigin();
@@ -40,7 +43,9 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
   const promoSecret = process.env.PROMO_FINGERPRINT_SECRET?.trim() ?? "";
   const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ?? "";
   const subscriptionPriceEnvConfigured = ["STRIPE_SUBSCRIPTION_PRICE_PLUS", "STRIPE_SUBSCRIPTION_PRICE_PRO", "STRIPE_SUBSCRIPTION_PRICE_STUDIO"].every((name) => /^price_/u.test(process.env[name]?.trim() ?? ""));
-  const adminOwnerConfigured = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(process.env.ADMIN_OWNER_USER_ID?.trim() ?? "");
+  const adminOwnerIdConfigured = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(process.env.ADMIN_OWNER_USER_ID?.trim() ?? "");
+  const adminOwnerEmailConfigured = isConfiguredAdminOwnerEmail(process.env.ADMIN_OWNER_EMAIL);
+  const adminOwnerConfigured = adminOwnerIdConfigured || adminOwnerEmailConfigured;
   const preview = isVercelPreview();
   const oidc = hasOidc(request);
   const stripeTestKey = stripeKey.startsWith("sk_test_") || stripeKey.startsWith("rk_test_");
@@ -60,7 +65,7 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
     supportEmail: { configured: supportEmailConfigured, required: true },
     stripeTestMode: { configured: stripeTestKey && present("STRIPE_WEBHOOK_SECRET") && stripePricesConfigured, required: true },
     subscriptionCatalog: { configured: subscriptionPricesConfigured, required: true },
-    adminOwnerBootstrap: { configured: adminOwnerConfigured, required: false },
+    adminOwnerBootstrap: { configured: adminOwnerConfigured, required: true },
     cron: { configured: present("CRON_SECRET"), required: !preview },
   };
 }
