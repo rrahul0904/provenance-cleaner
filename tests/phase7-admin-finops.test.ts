@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { shouldBootstrapOwner } from "@/lib/admin/auth";
+import { shouldBootstrapOwner } from "@/lib/admin/bootstrap";
 import { allows, canManageAdminUsers, canMutateOperations } from "@/lib/admin/permissions";
 import { budgetStatus, contributionMargin, costCoverage, microsToCents, projectedMonthEndMicros, sumMicros } from "@/lib/admin/finops";
 import { csvCell } from "@/lib/admin/csv";
@@ -46,8 +46,8 @@ describe("Phase 7 admin, subscription, and FinOps contracts", () => {
   });
 
   it("prevents formula injection in admin CSV exports", () => {
-    expect(csvCell("=SUM(A1:A2)")).toBe(""'=SUM(A1:A2)"");
-    expect(csvCell("normal")).toBe(""normal"");
+    expect(csvCell("=SUM(A1:A2)")).toBe("\"'=SUM(A1:A2)\"");
+    expect(csvCell("normal")).toBe("\"normal\"");
   });
 
   it("keeps private operational tables and browser roles denied", () => {
