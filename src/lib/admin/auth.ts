@@ -1,27 +1,11 @@
-import { getRequestIdentity, type RequestIdentity } from "@/lib/auth/identity";
-import { isConfiguredAdminOwnerEmail } from "@/lib/server/env";
+import { getRequestIdentity } from "@/lib/auth/identity";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { shouldBootstrapOwner } from "./bootstrap";
 import { isAdminRole, type AdminRole } from "./permissions";
 
 export type AdminSession = { userId: string; role: AdminRole };
 
 type AdminRow = { authorized?: boolean; role?: string };
-
-function normalizedEmail(value: string | null | undefined) {
-  return value?.trim().toLowerCase() || "";
-}
-
-export function shouldBootstrapOwner(
-  identity: RequestIdentity,
-  ownerUserId: string | undefined,
-  ownerEmail: string | undefined,
-) {
-  if (identity.isAnonymous) return false;
-  const configuredId = ownerUserId?.trim();
-  if (configuredId) return configuredId === identity.userId;
-  if (!identity.emailVerified || !identity.email || !isConfiguredAdminOwnerEmail(ownerEmail)) return false;
-  return normalizedEmail(identity.email) === normalizedEmail(ownerEmail);
-}
 
 export async function getAdminSession(): Promise<AdminSession | null> {
   const identity = await getRequestIdentity();
