@@ -1,9 +1,6 @@
 {
   "git": {
-    "deploymentEnabled": {
-      "ui-overhaul-application-shell": true,
-      "*": false
-    }
+    "deploymentEnabled": false
   },
   "crons": [
     { "path": "/api/internal/reconcile", "schedule": "17 4 * * *" },
