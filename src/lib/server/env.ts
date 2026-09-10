@@ -65,7 +65,10 @@ export function readinessChecks(request?: Request): Record<string, ReadinessChec
     supportEmail: { configured: supportEmailConfigured, required: true },
     stripeTestMode: { configured: stripeTestKey && present("STRIPE_WEBHOOK_SECRET") && stripePricesConfigured, required: true },
     subscriptionCatalog: { configured: subscriptionPricesConfigured, required: true },
-    adminOwnerBootstrap: { configured: adminOwnerConfigured, required: true },
+    // Bootstrap configuration is intentionally optional after an owner has been
+    // provisioned in ops.admin_users. /api/readiness combines this signal with
+    // authoritative database state in its required adminOwner check.
+    adminOwnerBootstrap: { configured: adminOwnerConfigured, required: false },
     cron: { configured: present("CRON_SECRET"), required: !preview },
   };
 }
