@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { isConfiguredAdminOwnerEmail, isConfiguredSupportEmail, readinessChecks } from "@/lib/server/env";
+
+const publicReadiness = readFileSync("src/app/api/readiness/route.ts", "utf8");
+const adminReadiness = readFileSync("src/app/api/admin/readiness/route.ts", "utf8");
 
 describe("production email readiness", () => {
   it("requires a legitimate, non-placeholder support address", () => {
@@ -32,5 +36,18 @@ describe("production email readiness", () => {
       if (originalEmail === undefined) delete process.env.ADMIN_OWNER_EMAIL;
       else process.env.ADMIN_OWNER_EMAIL = originalEmail;
     }
+  });
+
+  it("does not mark the customer-facing service unavailable solely because Admin is not activated", () => {
+    expect(publicReadiness).toContain("adminOwner:{configured:adminReady,required:false}");
+    expect(publicReadiness).not.toContain('...(adminReady?[]:["adminOwner"])');
+    expect(publicReadiness).toContain('readinessEndpoint:"/api/admin/readiness"');
+  });
+
+  it("keeps the private Admin control plane fail-closed until an owner or bootstrap identity exists", () => {
+    expect(adminReadiness).toContain("const ready=ownerConfigured||bootstrapConfigured");
+    expect(adminReadiness).toContain("adminOwner:{configured:ready,required:true}");
+    expect(adminReadiness).toContain('missing:ready?[]:["adminOwner"]');
+    expect(adminReadiness).toContain("ready?200:503");
   });
 });
