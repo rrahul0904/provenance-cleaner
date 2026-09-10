@@ -7,6 +7,8 @@ import { csvCell } from "@/lib/admin/csv";
 import { SUBSCRIPTION_PLANS, subscriptionInvoiceSourceKey, subscriptionMonthlyMrrCents } from "@/lib/billing/subscriptions";
 
 const migration = readFileSync("supabase/migrations/20260903144643_phase7_admin_finops_subscriptions.sql", "utf8");
+const predeploy = readFileSync("scripts/predeploy.mjs", "utf8");
+const releaseGate = readFileSync("scripts/release-gate.mjs", "utf8");
 
 describe("Phase 7 admin, subscription, and FinOps contracts", () => {
   it("enforces owner/admin/viewer authority without a client role", () => {
@@ -25,6 +27,13 @@ describe("Phase 7 admin, subscription, and FinOps contracts", () => {
     expect(shouldBootstrapOwner(verified, undefined, "OWNER@provenancecleaner.com")).toBe(true);
     expect(shouldBootstrapOwner({ ...verified, emailVerified: false }, undefined, "owner@provenancecleaner.com")).toBe(false);
     expect(shouldBootstrapOwner({ ...verified, isAnonymous: true }, undefined, "owner@provenancecleaner.com")).toBe(false);
+  });
+
+  it("keeps bootstrap configuration optional after authoritative owner provisioning", () => {
+    expect(predeploy).toContain("const ownerProvided = Boolean(ownerId || ownerEmail)");
+    expect(predeploy).toContain("!ownerProvided ||");
+    expect(releaseGate).toContain('Admin owner bootstrap syntax');
+    expect(releaseGate).toContain("optional; runtime readiness verifies authoritative owner state");
   });
 
   it("uses integer minor-unit/micro arithmetic and explicit budget states", () => {
