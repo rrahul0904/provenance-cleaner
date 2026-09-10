@@ -27,8 +27,9 @@ add("Stripe TEST subscription fallback catalog",["price_1UBmgJRB8OGmEnBwoUtRmBKb
 
 const ownerId=process.env.ADMIN_OWNER_USER_ID?.trim()??"";
 const ownerEmail=process.env.ADMIN_OWNER_EMAIL?.trim()??"";
-const ownerBootstrapValid=(ownerId&&validUuid(ownerId))||(!ownerId&&validOperationalEmail(ownerEmail));
-add("Admin owner bootstrap",Boolean(ownerBootstrapValid),ownerId?"UUID configured":ownerEmail?"verified-email bootstrap configured":"missing");
+const ownerProvided=Boolean(ownerId||ownerEmail);
+const ownerBootstrapValid=!ownerProvided||(ownerId?validUuid(ownerId):validOperationalEmail(ownerEmail));
+add("Admin owner bootstrap syntax",Boolean(ownerBootstrapValid),ownerId?"UUID configured":ownerEmail?"verified-email bootstrap configured":"optional; runtime readiness verifies authoritative owner state");
 
 if(process.env.STRIPE_SECRET_KEY)add("Stripe test mode",process.env.STRIPE_SECRET_KEY.startsWith("sk_test_")||process.env.STRIPE_SECRET_KEY.startsWith("rk_test_"),"live keys are forbidden during controlled launch");
 if(process.env.NEXT_PUBLIC_APP_URL)add("HTTPS app URL",/^https:\/\//u.test(process.env.NEXT_PUBLIC_APP_URL),process.env.NEXT_PUBLIC_APP_URL);
