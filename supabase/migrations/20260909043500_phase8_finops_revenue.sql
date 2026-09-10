@@ -273,3 +273,12 @@ revoke all on function public.billing_phase8_status() from public, anon, authent
 grant execute on function public.billing_record_checkout_amount(uuid,text,bigint,text) to service_role;
 grant execute on function public.billing_record_subscription_invoice_amount(text,bigint,text) to service_role;
 grant execute on function public.billing_phase8_status() to service_role;
+
+
+-- Cover Phase 7 foreign keys used by admin/metrics cleanup and joins.
+create index if not exists admin_audit_log_admin_user_idx
+  on ops.admin_audit_log(admin_user_id);
+create index if not exists admin_users_created_by_idx
+  on ops.admin_users(created_by);
+create index if not exists metric_events_subject_id_idx
+  on ops.metric_events(subject_id);
