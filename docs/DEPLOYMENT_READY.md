@@ -3,11 +3,13 @@
 Before a production deployment:
 
 1. Apply and verify the Phase 7 and Phase 8 Supabase migrations.
-2. Provision at least one enabled database owner in `ops.admin_users`. `ADMIN_OWNER_USER_ID` is optional after bootstrap.
-3. Verify the Stripe TEST recurring catalog. The three controlled-launch TEST price IDs are committed as a TEST-only fallback; environment overrides remain supported.
-4. Verify the Stripe TEST production webhook includes one-time Checkout plus subscription lifecycle events.
-5. Activate a Stripe TEST Billing Portal configuration.
-6. Run CI and `deployment-readiness` against the exact release SHA.
+2. Verify the Stripe TEST recurring catalog. The three controlled-launch TEST price IDs are committed as a TEST-only fallback; environment overrides remain supported.
+3. Verify the Stripe TEST production webhook includes one-time Checkout plus subscription lifecycle events.
+4. Activate a Stripe TEST Billing Portal configuration.
+5. Run CI and `deployment-readiness` against the exact release SHA.
+6. Verify `/api/health` and customer-facing `/api/readiness` on the deployed artifact.
+
+Admin activation is intentionally independent from customer-facing service readiness. `/api/readiness` reports Admin state as a non-blocking signal; `/api/admin/readiness` remains fail-closed until either an enabled database owner exists in `ops.admin_users` or a valid one-time bootstrap identity is configured. This prevents an unverified or arbitrary user from becoming owner while allowing the public product to serve safely before a human operator completes account verification.
 
 Automatic Vercel Git deployments remain disabled in `vercel.json`.
 
