@@ -32,9 +32,12 @@ export async function GET(request:Request){
   const adminBootstrapConfigured=env.checks.adminOwnerBootstrap?.configured===true;
   const adminReady=adminOwnerProvisioned||adminBootstrapConfigured;
 
+  // Customer-facing service readiness is independent from whether a human has
+  // activated the private Admin control plane. Admin activation is exposed as
+  // a non-blocking signal here and has its own fail-closed readiness endpoint.
   const checks={
     ...env.checks,
-    adminOwner:{configured:adminReady,required:true},
+    adminOwner:{configured:adminReady,required:false},
     adminOwnerProvisioned:{configured:adminOwnerProvisioned,required:false},
     phase6Schema:{configured:phase6Ready,required:true},
     phase7Schema:{configured:phase7Ready,required:true},
@@ -42,7 +45,6 @@ export async function GET(request:Request){
   };
   const missing=[
     ...env.missing,
-    ...(adminReady?[]:["adminOwner"]),
     ...(phase6Ready?[]:["phase6Schema"]),
     ...(phase7Ready?[]:["phase7Schema"]),
     ...(phase8Ready?[]:["phase8Schema"]),
@@ -56,6 +58,6 @@ export async function GET(request:Request){
     phase6:phase6?{ready:phase6Ready,schemaVersion:phase6.schemaVersion,balanceLotMismatches:phase6.balanceLotMismatches,deletionReconciliationPending:phase6.deletionReconciliationPending,staleDeletionCancellationPending:phase6.staleDeletionCancellationPending}:null,
     phase7:phase7?{ready:phase7Ready,schemaVersion:phase7.schemaVersion}:null,
     phase8:phase8?{ready:phase8Ready,schemaVersion:phase8.schemaVersion,invoiceAuthoritativeGrants:phase8.invoiceAuthoritativeGrants,subscriptionDeletionSafety:phase8.subscriptionDeletionSafety,legacyRefundUpgrade:phase8.legacyRefundUpgrade,finopsRevenueEvidence:phase8.finopsRevenueEvidence}:null,
-    admin:{ready:adminReady,ownerConfigured:adminOwnerProvisioned,bootstrapConfigured:adminBootstrapConfigured},
+    admin:{ready:adminReady,ownerConfigured:adminOwnerProvisioned,bootstrapConfigured:adminBootstrapConfigured,readinessEndpoint:"/api/admin/readiness"},
   },ready?200:503,{"cache-control":"no-store"});
 }
