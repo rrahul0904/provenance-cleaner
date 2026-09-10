@@ -7,6 +7,8 @@ on:
         description: Exact certified Git SHA to deploy
         required: true
         type: string
+  push:
+    branches: [production-release]
 
 permissions:
   contents: read
@@ -16,13 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: production
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ inputs.expected_sha || github.sha }}
           fetch-depth: 0
       - name: Refuse a different SHA
-        run: test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha }}"
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Require production-release push to match current main
+        if: github.event_name == 'push'
+        run: |
+          git fetch origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
