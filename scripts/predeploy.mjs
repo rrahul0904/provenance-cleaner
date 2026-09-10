@@ -1,8 +1,7 @@
+import { readFileSync } from "node:fs";
+
 const required = [
-  "NEXT_PUBLIC_APP_URL",
   "NEXT_PUBLIC_SUPPORT_EMAIL",
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_SECRET_KEY",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
@@ -30,6 +29,9 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const placeholderEmail = /(^|@)(example\.(com|invalid|org)|invalid|localhost)$|placeholder/iu;
 const validOperationalEmail = (value) => emailPattern.test(value) && !placeholderEmail.test(value);
 const validUuid = (value) => /^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(value);
+const publicConfig = readFileSync("src/lib/public-config.ts", "utf8");
+const committedSupabaseUrl = publicConfig.includes('const DEFAULT_SUPABASE_URL = "https://cikxzxxreryycfjumwsd.supabase.co"');
+const committedSupabaseKey = publicConfig.includes('const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Jsa3NElnKfCPiXMes-CrXg_hthFy4r1"');
 
 let failed = false;
 for (const key of required) {
@@ -43,6 +45,18 @@ for (const key of required) {
   console.log(`${valid ? "configured" : "missing_or_invalid"} ${key}`);
   failed ||= !valid;
 }
+
+const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "";
+const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim() || "";
+const appOriginValid = appUrl ? /^https:\/\//u.test(appUrl) : Boolean(vercelHost);
+console.log(`${appOriginValid ? (appUrl ? "configured" : "derived_from_vercel") : "missing_or_invalid"} APP_ORIGIN`);
+failed ||= !appOriginValid;
+
+const publicSupabaseValid =
+  Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || committedSupabaseUrl)
+  && Boolean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() || committedSupabaseKey);
+console.log(`${publicSupabaseValid ? "configured_or_committed_fallback" : "missing_or_invalid"} SUPABASE_PUBLIC_CONFIG`);
+failed ||= !publicSupabaseValid;
 
 const ownerId = process.env.ADMIN_OWNER_USER_ID?.trim() ?? "";
 const ownerEmail = process.env.ADMIN_OWNER_EMAIL?.trim() ?? "";

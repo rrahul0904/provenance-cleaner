@@ -36,6 +36,14 @@ describe("Phase 7 admin, subscription, and FinOps contracts", () => {
     expect(releaseGate).toContain("optional; runtime readiness verifies authoritative owner state");
   });
 
+  it("accepts committed public Supabase and Vercel-origin fallbacks in release gates", () => {
+    expect(predeploy).toContain("derived_from_vercel");
+    expect(predeploy).toContain("configured_or_committed_fallback");
+    expect(releaseGate).toContain("committed dedicated-project fallback");
+    expect(releaseGate).toContain("derived from Vercel system URL");
+    expect(releaseGate).not.toContain('requiredClient=["NEXT_PUBLIC_APP_URL"');
+  });
+
   it("uses integer minor-unit/micro arithmetic and explicit budget states", () => {
     expect(microsToCents(19_999)).toBe(2);
     expect(sumMicros([{ provider: "AI", amountMicros: 125, source: "ACTUAL" }, { provider: "Stripe", amountMicros: 75, source: "ESTIMATED" }])).toBe(200);
