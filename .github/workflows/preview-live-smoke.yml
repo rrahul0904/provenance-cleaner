@@ -1,45 +1,76 @@
 name: preview-live-smoke
 
 on:
-  pull_request:
-    types: [synchronize]
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact Git SHA to deploy and certify in Preview
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  guest-session-preview:
-    if: github.event.pull_request.number == 13 && github.event.pull_request.head.ref == 'final-parity-audit-completion'
+  exact-preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
+    env:
+      EXPECTED_HEAD_SHA: ${{ inputs.expected_sha }}
+      VERCEL_ORG_ID: team_zmEezpOKGZy2sH5nqTfO44LD
+      VERCEL_PROJECT_ID: prj_OfVZG87ItRr7Kzw6PJT9Z5ouw04K
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
-      - name: Require protected Preview automation access
-        env:
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      - name: Refuse a different SHA
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+      - name: Require Vercel deployment credential
         run: |
-          if [ -z "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" ]; then
-            echo "::error::Protected Preview runtime verification is blocked because VERCEL_AUTOMATION_BYPASS_SECRET is not configured in GitHub Actions. Do not interpret this as an application auth failure."
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::VERCEL_TOKEN is required for exact-head Preview certification."
             exit 1
           fi
-      - name: Install exact dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install exact dependencies and pinned Vercel CLI
+        run: |
+          npm ci --no-audit --no-fund
+          npm i -g vercel@59.10.0
+      - name: Link exact Vercel project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Pull Preview configuration
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID"
+      - name: Build exact Preview artifact
+        run: vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID"
+      - name: Deploy exact Preview artifact
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_ORG_ID" | tail -n 1)"
+          case "$url" in
+            https://*.vercel.app) ;;
+            *) echo "::error::Unexpected Vercel deployment URL: $url"; exit 1 ;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
-      - name: Prove real Preview guest-session persistence
+      - name: Prove exact-head Preview guest, Stripe TEST, billing and transform flows
         env:
-          PREVIEW_URL: https://provenance-cleaner-git-final-p-af6480-rrahul0904-5013s-projects.vercel.app
-          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: npx playwright test tests/preview-live/guest-session.preview.spec.ts --config=playwright.preview.config.ts
+        run: npx playwright test tests/preview-live/guest-session.preview.spec.ts tests/preview-live/controlled-launch.spec.ts --config=playwright.preview.config.ts
       - name: Preserve Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: preview-guest-session-playwright-report
+          name: preview-live-smoke-${{ inputs.expected_sha }}
           path: playwright-report
           if-no-files-found: ignore
           retention-days: 7

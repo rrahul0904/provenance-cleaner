@@ -1,14 +1,14 @@
 name: deploy-production
 
 on:
-  push:
-    branches: [production-release]
   workflow_dispatch:
     inputs:
       expected_sha:
         description: Exact certified Git SHA to deploy
         required: true
         type: string
+  push:
+    branches: [production-release]
 
 permissions:
   contents: read
@@ -18,13 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: production
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.expected_sha || github.sha }}
           fetch-depth: 0
       - name: Refuse a different SHA
-        run: test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha || github.sha }}"
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Require production-release push to match current main
+        if: github.event_name == 'push'
+        run: |
+          git fetch origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
@@ -35,21 +42,25 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      - name: Production configuration preflight
+        run: node --env-file=.env.local scripts/predeploy.mjs
+      - name: Production release gate
+        run: node --env-file=.env.local scripts/release-gate.mjs
       - name: Ensure Stripe TEST Billing Portal
         run: node --env-file=.env.local scripts/configure-stripe-portal.mjs
       - run: npm test
       - run: npm run lint
       - run: npm run build
-      - run: npm run release:check
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
-      - run: npm run predeploy
+      - name: Re-run Production preflight immediately before build
+        run: node --env-file=.env.local scripts/predeploy.mjs
       - name: Build exact Production artifact
         run: vercel build --prod --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      - name: Deploy exact prebuilt artifact
+      - name: Deploy exact prebuilt Production artifact
         run: vercel deploy --prebuilt --prod --yes --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

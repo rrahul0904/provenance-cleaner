@@ -24,8 +24,10 @@ export type Database = {
       billing_phase8_status: { Args: Record<string, never>; Returns: Json };
       billing_prepare_account_deletion: { Args: { p_user_id: string }; Returns: Json };
       billing_reconcile_deleted_subjects: { Args: { p_limit?: number }; Returns: Json };
+      billing_record_checkout_amount: { Args: { p_amount: number; p_currency: string; p_purchase_id: string; p_session_id: string }; Returns: Json };
       billing_record_policy_refund: { Args: { p_amount: number; p_currency: string; p_event_id: string; p_event_type: string; p_purchase_id: string; p_reason: string; p_refund_id: string }; Returns: Json };
       billing_record_purchase_refund: { Args: { p_amount: number; p_credits: number; p_currency: string; p_purchase_id: string; p_refund_id: string; p_user_id: string }; Returns: Json };
+      billing_record_subscription_invoice_amount: { Args: { p_amount: number; p_currency: string; p_invoice_id: string }; Returns: Json };
       billing_release_reservation: { Args: { p_reason: string; p_reservation_id: string; p_user_id: string }; Returns: Json };
       billing_reserve_credits: { Args: { p_credits: number; p_credits_per_24h: number; p_operation_key: string; p_requests_per_minute: number; p_ttl_minutes: number; p_user_id: string }; Returns: Json };
       billing_link_stripe_customer: { Args: { p_customer_id: string; p_user_id: string }; Returns: Json };

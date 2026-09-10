@@ -28,12 +28,13 @@ describe("Phase 8 subscription release regressions", () => {
     expect(checkout).toContain("billing_get_stripe_customer");
   });
 
-  it("binds Portal sessions to an idempotently provisioned TEST configuration", () => {
+  it("binds Portal sessions to a TEST configuration with safe cancellation semantics", () => {
     expect(portal).toContain("billingPortal.configurations.list");
     expect(portal).toContain("configuration: configuration.id");
     expect(portalBootstrap).toContain("billingPortal.configurations.create");
-    expect(portalBootstrap).toContain("subscription_update");
-    expect(portalBootstrap).toContain("subscription_cancel");
+    expect(portalBootstrap).toContain('subscription_update: { enabled: false }');
+    expect(portalBootstrap).toContain('mode: "at_period_end"');
+    expect(portalBootstrap).toContain("Refusing a Billing Portal configuration that allows plan switching.");
   });
 
   it("exposes an actionable monthly plan UI and requires final database readiness", () => {
