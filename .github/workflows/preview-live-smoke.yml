@@ -1,45 +1,52 @@
 name: preview-live-smoke
 
 on:
-  pull_request:
-    types: [synchronize]
+  deployment_status:
 
 permissions:
   contents: read
 
+concurrency:
+  group: preview-live-smoke-${{ github.event.deployment.sha }}
+  cancel-in-progress: true
+
 jobs:
-  guest-session-preview:
-    if: github.event.pull_request.number == 13 && github.event.pull_request.head.ref == 'final-parity-audit-completion'
+  exact-preview:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment != 'Production'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
-      - name: Require protected Preview automation access
+      - name: Refuse a different SHA
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.deployment.sha }}"
+      - name: Validate Vercel Preview target
         env:
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          PREVIEW_URL: ${{ github.event.deployment_status.target_url }}
         run: |
-          if [ -z "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" ]; then
-            echo "::error::Protected Preview runtime verification is blocked because VERCEL_AUTOMATION_BYPASS_SECRET is not configured in GitHub Actions. Do not interpret this as an application auth failure."
-            exit 1
-          fi
+          case "$PREVIEW_URL" in
+            https://*.vercel.app*) ;;
+            *) echo "::error::Deployment target is not a Vercel Preview URL: $PREVIEW_URL"; exit 1 ;;
+          esac
       - name: Install exact dependencies
         run: npm ci --no-audit --no-fund
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
-      - name: Prove real Preview guest-session persistence
+      - name: Prove exact-head Preview guest, billing, Stripe TEST and transform flows
         env:
-          PREVIEW_URL: https://provenance-cleaner-git-final-p-af6480-rrahul0904-5013s-projects.vercel.app
-          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREVIEW_URL: ${{ github.event.deployment_status.target_url }}
+          EXPECTED_HEAD_SHA: ${{ github.event.deployment.sha }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: npx playwright test tests/preview-live/guest-session.preview.spec.ts --config=playwright.preview.config.ts
+        run: npx playwright test tests/preview-live/guest-session.preview.spec.ts tests/preview-live/controlled-launch.spec.ts --config=playwright.preview.config.ts
       - name: Preserve Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: preview-guest-session-playwright-report
+          name: preview-live-smoke-${{ github.event.deployment.sha }}
           path: playwright-report
           if-no-files-found: ignore
           retention-days: 7
