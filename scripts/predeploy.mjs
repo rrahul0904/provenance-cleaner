@@ -46,8 +46,9 @@ for (const key of required) {
 
 const ownerId = process.env.ADMIN_OWNER_USER_ID?.trim() ?? "";
 const ownerEmail = process.env.ADMIN_OWNER_EMAIL?.trim() ?? "";
-const ownerValid = (ownerId && validUuid(ownerId)) || (!ownerId && validOperationalEmail(ownerEmail));
-console.log(`${ownerValid ? "configured" : "missing_or_invalid"} ADMIN_OWNER_BOOTSTRAP`);
+const ownerProvided = Boolean(ownerId || ownerEmail);
+const ownerValid = !ownerProvided || (ownerId ? validUuid(ownerId) : validOperationalEmail(ownerEmail));
+console.log(`${ownerValid ? (ownerProvided ? "configured" : "optional_runtime_check") : "invalid"} ADMIN_OWNER_BOOTSTRAP`);
 failed ||= !ownerValid;
 
 if (failed) process.exit(1);
