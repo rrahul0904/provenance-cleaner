@@ -20,6 +20,7 @@ jobs:
     environment: production
     env:
       EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
+      NEXT_PUBLIC_BUILD_SHA: ${{ inputs.expected_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,7 +62,37 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       - name: Deploy exact prebuilt Production artifact
-        run: vercel deploy --prebuilt --prod --yes --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}"
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$(vercel deploy --prebuilt --prod --yes --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}")"
+          printf '%s\n' "$output"
+          deployment_url="$(printf '%s\n' "$output" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n 1)"
+          test -n "$deployment_url"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      - name: Verify deployed SHA and public readiness
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            health="$(curl --fail --silent --show-error "$DEPLOYMENT_URL/api/health" || true)"
+            readiness="$(curl --fail --silent --show-error "$DEPLOYMENT_URL/api/readiness" || true)"
+            if [ -n "$health" ] && [ -n "$readiness" ]; then
+              actual_sha="$(node -e 'const body=JSON.parse(process.argv[1]); process.stdout.write(body.commitSha || "")' "$health")"
+              ready="$(node -e 'const body=JSON.parse(process.argv[1]); process.stdout.write(body.status || "")' "$readiness")"
+              if [ "$actual_sha" = "$EXPECTED_SHA" ] && [ "$ready" = "ready" ]; then
+                printf 'Verified production deployment %s at %s\n' "$EXPECTED_SHA" "$DEPLOYMENT_URL"
+                exit 0
+              fi
+              printf 'Attempt %s: commitSha=%s readiness=%s\n' "$attempt" "${actual_sha:-missing}" "${ready:-missing}"
+            fi
+            sleep 5
+          done
+          echo "Production exact-SHA/readiness verification failed." >&2
+          exit 1
