@@ -5,7 +5,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const context = requestContext(request, "/api/health");
-  const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.trim() || process.env.GITHUB_SHA?.trim() || null;
+  const commitSha =
+    process.env.NEXT_PUBLIC_BUILD_SHA?.trim() ||
+    process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
+    process.env.GITHUB_SHA?.trim() ||
+    null;
   void trackHealth("ok");
   return apiOk(
     context,
