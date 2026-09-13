@@ -21,6 +21,8 @@ jobs:
     env:
       EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
       NEXT_PUBLIC_BUILD_SHA: ${{ inputs.expected_sha || github.sha }}
+      VERCEL_ORG_ID: team_zmEezpOKGZy2sH5nqTfO44LD
+      VERCEL_PROJECT_ID: prj_OfVZG87ItRr7Kzw6PJT9Z5ouw04K
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,6 +35,16 @@ jobs:
         run: |
           git fetch origin main --depth=1
           test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
+      - name: Require Vercel deployment credential
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::Missing GitHub Actions secret VERCEL_TOKEN. Add a Vercel access token with deployment access to the provenance-cleaner project."
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
@@ -42,7 +54,6 @@ jobs:
         run: vercel env pull .env.local --yes --environment=production --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       - name: Production configuration preflight
         run: node --env-file=.env.local scripts/predeploy.mjs
       - name: Production release gate
@@ -60,7 +71,6 @@ jobs:
         run: vercel build --prod --token="${VERCEL_TOKEN}" --scope="${VERCEL_ORG_ID}"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       - name: Deploy exact prebuilt Production artifact
         id: deploy
         shell: bash
@@ -73,7 +83,6 @@ jobs:
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       - name: Verify deployed SHA and public readiness
         shell: bash
         env:
