@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "provenance:cli": "node scripts/provenance-cli.mjs",
     "release:check": "node scripts/release-gate.mjs",
     "predeploy": "node scripts/predeploy.mjs",
     "predeploy:certify": "npm test && npm run lint && npm run build && npm run release:check && npm run test:e2e && npm run predeploy"
