@@ -84,24 +84,6 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       - name: Verify deployed SHA and public readiness
-        shell: bash
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 12); do
-            health="$(curl --fail --silent --show-error "$DEPLOYMENT_URL/api/health" || true)"
-            readiness="$(curl --fail --silent --show-error "$DEPLOYMENT_URL/api/readiness" || true)"
-            if [ -n "$health" ] && [ -n "$readiness" ]; then
-              actual_sha="$(node -e 'const body=JSON.parse(process.argv[1]); process.stdout.write(body.commitSha || "")' "$health")"
-              ready="$(node -e 'const body=JSON.parse(process.argv[1]); process.stdout.write(body.status || "")' "$readiness")"
-              if [ "$actual_sha" = "$EXPECTED_SHA" ] && [ "$ready" = "ready" ]; then
-                printf 'Verified production deployment %s at %s\n' "$EXPECTED_SHA" "$DEPLOYMENT_URL"
-                exit 0
-              fi
-              printf 'Attempt %s: commitSha=%s readiness=%s\n' "$attempt" "${actual_sha:-missing}" "${ready:-missing}"
-            fi
-            sleep 5
-          done
-          echo "Production exact-SHA/readiness verification failed." >&2
-          exit 1
+        run: node scripts/verify-production.mjs --url "$DEPLOYMENT_URL" --expected-sha "$EXPECTED_SHA" --attempts 12 --delay-ms 5000
