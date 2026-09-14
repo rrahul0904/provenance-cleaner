@@ -12,6 +12,19 @@ type ApiKey = {
 };
 
 type CreatedKey = ApiKey & { secret: string };
+type KeyLoadResult = { eligible: boolean; keys: ApiKey[]; message: string | null };
+
+async function fetchKeys(): Promise<KeyLoadResult> {
+  const response = await fetch("/api/account/api-keys", { cache: "no-store" });
+  if (response.status === 401 || response.status === 403) {
+    return { eligible: false, keys: [], message: null };
+  }
+  if (!response.ok) {
+    return { eligible: true, keys: [], message: "Developer API keys are temporarily unavailable." };
+  }
+  const body = await response.json();
+  return { eligible: true, keys: Array.isArray(body.keys) ? body.keys : [], message: null };
+}
 
 export function DeveloperApiPanel() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
@@ -22,24 +35,31 @@ export function DeveloperApiPanel() {
   const [eligible, setEligible] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  async function load() {
-    const response = await fetch("/api/account/api-keys", { cache: "no-store" });
-    if (response.status === 401 || response.status === 403) {
-      setEligible(false);
-      setLoading(false);
-      return;
-    }
-    if (!response.ok) {
-      setMessage("Developer API keys are temporarily unavailable.");
-      setLoading(false);
-      return;
-    }
-    const body = await response.json();
-    setKeys(Array.isArray(body.keys) ? body.keys : []);
+  async function refreshKeys() {
+    const result = await fetchKeys();
+    setEligible(result.eligible);
+    setKeys(result.keys);
+    setMessage(current => result.message ?? current);
     setLoading(false);
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let active = true;
+    void fetchKeys()
+      .then(result => {
+        if (!active) return;
+        setEligible(result.eligible);
+        setKeys(result.keys);
+        setMessage(result.message);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setMessage("Developer API keys are temporarily unavailable.");
+        setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   async function createKey() {
     setBusy(true);
@@ -55,7 +75,7 @@ export function DeveloperApiPanel() {
       if (!response.ok) throw new Error(body?.error?.message ?? "API key could not be created.");
       setCreated(body.key as CreatedKey);
       setMessage("Copy this secret now. It will not be shown again.");
-      await load();
+      await refreshKeys();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "API key could not be created.");
     } finally {
@@ -75,7 +95,7 @@ export function DeveloperApiPanel() {
       const body = await response.json();
       if (!response.ok) throw new Error(body?.error?.message ?? "API key could not be revoked.");
       setCreated(current => current?.id === id ? null : current);
-      await load();
+      await refreshKeys();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "API key could not be revoked.");
     } finally {
