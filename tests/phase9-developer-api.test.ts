@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEVELOPER_API_KEY_PREFIX, developerApiKeyHash, developerBearerToken, generateDeveloperApiKeyMaterial } from "@/lib/developer-api";
 
 const migration = readFileSync("supabase/migrations/20260914153000_phase9_developer_api.sql", "utf8");
+const hardeningMigration = readFileSync("supabase/migrations/20260914155500_phase9_developer_api_concurrency.sql", "utf8");
 const accountKeys = readFileSync("src/app/api/account/api-keys/route.ts", "utf8");
 const scan = readFileSync("src/app/api/v1/scan/route.ts", "utf8");
 const transform = readFileSync("src/app/api/v1/transform/route.ts", "utf8");
@@ -34,6 +35,14 @@ describe("Phase 9 developer API", () => {
     expect(migration).toContain("grant execute on function public.developer_api_key_resolve(text) to service_role");
     expect(migration).toContain("coalesce(u.is_anonymous, false) = false");
     expect(migration).toContain("u.email_confirmed_at is not null");
+  });
+
+  it("serializes key creation before enforcing the active-key cap", () => {
+    expect(hardeningMigration).toContain("for update");
+    expect(hardeningMigration).toContain("from auth.users u");
+    expect(hardeningMigration).toContain("count(*) from ops.developer_api_keys");
+    expect(hardeningMigration.indexOf("for update")).toBeLessThan(hardeningMigration.indexOf("count(*) from ops.developer_api_keys"));
+    expect(hardeningMigration).toContain("grant execute on function public.developer_api_key_create(uuid,text,text,text) to service_role");
   });
 
   it("requires a verified browser identity to manage keys", () => {
