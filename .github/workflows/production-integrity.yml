@@ -1,0 +1,31 @@
+name: production-integrity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PRODUCTION_URL: https://provenance-cleaner.vercel.app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+      - name: Determine expected main SHA
+        shell: bash
+        run: echo "EXPECTED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Verify canonical production matches main
+        run: node scripts/verify-production.mjs --url "$PRODUCTION_URL" --expected-sha "$EXPECTED_SHA" --attempts 3 --delay-ms 5000
