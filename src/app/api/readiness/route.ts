@@ -1,4 +1,5 @@
 import { getPhase6Status } from "@/lib/billing/server";
+import { getDeveloperPhase9Status } from "@/lib/developer-api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { apiOk, requestContext } from "@/lib/server/api";
 import { readinessSummary } from "@/lib/server/env";
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 const REQUIRED_PHASE6_SCHEMA = "20260902034500";
 const REQUIRED_PHASE7_SCHEMA = "20260903144643";
 const REQUIRED_PHASE8_SCHEMA = "20260909043500";
+const REQUIRED_PHASE9_SCHEMA = "20260914153000";
 
 function record(value:unknown){return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:null;}
 
@@ -26,15 +28,16 @@ export async function GET(request:Request){
   try{const {data,error}=await createAdminClient().rpc("billing_phase8_status");if(!error)phase8=record(data);}catch{phase8=null;}
   const phase8Ready=phase8?.ready===true&&phase8.schemaVersion===REQUIRED_PHASE8_SCHEMA;
 
+  let phase9:Record<string,unknown>|null=null;
+  try{phase9=record(await getDeveloperPhase9Status());}catch{phase9=null;}
+  const phase9Ready=phase9?.ready===true&&phase9.schemaVersion===REQUIRED_PHASE9_SCHEMA;
+
   let adminStatus:Record<string,unknown>|null=null;
   try{const {data,error}=await createAdminClient().rpc("ops_admin_status");if(!error)adminStatus=record(data);}catch{adminStatus=null;}
   const adminOwnerProvisioned=adminStatus?.ownerConfigured===true;
   const adminBootstrapConfigured=env.checks.adminOwnerBootstrap?.configured===true;
   const adminReady=adminOwnerProvisioned||adminBootstrapConfigured;
 
-  // Customer-facing service readiness is independent from whether a human has
-  // activated the private Admin control plane. Admin activation is exposed as
-  // a non-blocking signal here and has its own fail-closed readiness endpoint.
   const checks={
     ...env.checks,
     adminOwner:{configured:adminReady,required:false},
@@ -42,12 +45,14 @@ export async function GET(request:Request){
     phase6Schema:{configured:phase6Ready,required:true},
     phase7Schema:{configured:phase7Ready,required:true},
     phase8Schema:{configured:phase8Ready,required:true},
+    phase9Schema:{configured:phase9Ready,required:true},
   };
   const missing=[
     ...env.missing,
     ...(phase6Ready?[]:["phase6Schema"]),
     ...(phase7Ready?[]:["phase7Schema"]),
     ...(phase8Ready?[]:["phase8Schema"]),
+    ...(phase9Ready?[]:["phase9Schema"]),
   ];
   const ready=missing.length===0;
 
@@ -58,6 +63,7 @@ export async function GET(request:Request){
     phase6:phase6?{ready:phase6Ready,schemaVersion:phase6.schemaVersion,balanceLotMismatches:phase6.balanceLotMismatches,deletionReconciliationPending:phase6.deletionReconciliationPending,staleDeletionCancellationPending:phase6.staleDeletionCancellationPending}:null,
     phase7:phase7?{ready:phase7Ready,schemaVersion:phase7.schemaVersion}:null,
     phase8:phase8?{ready:phase8Ready,schemaVersion:phase8.schemaVersion,invoiceAuthoritativeGrants:phase8.invoiceAuthoritativeGrants,subscriptionDeletionSafety:phase8.subscriptionDeletionSafety,legacyRefundUpgrade:phase8.legacyRefundUpgrade,finopsRevenueEvidence:phase8.finopsRevenueEvidence}:null,
+    phase9:phase9?{ready:phase9Ready,schemaVersion:phase9.schemaVersion,hashedSecretsOnly:phase9.hashedSecretsOnly,verifiedAccountsOnly:phase9.verifiedAccountsOnly,revocationSupported:phase9.revocationSupported}:null,
     admin:{ready:adminReady,ownerConfigured:adminOwnerProvisioned,bootstrapConfigured:adminBootstrapConfigured,readinessEndpoint:"/api/admin/readiness"},
   },ready?200:503,{"cache-control":"no-store"});
 }
