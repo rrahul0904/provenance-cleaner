@@ -1,0 +1,121 @@
+const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/iu;
+
+export function normalizeOrigin(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) throw new Error("Production URL is required.");
+  const url = new URL(raw);
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("Production URL must use http or https.");
+  }
+  return url.origin;
+}
+
+export function normalizeCommitSha(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+export function assessReleaseIntegrity({ expectedSha, health, readiness }) {
+  const expected = normalizeCommitSha(expectedSha);
+  const actual = normalizeCommitSha(health?.commitSha);
+  const missing = Array.isArray(readiness?.missing)
+    ? readiness.missing.filter((item) => typeof item === "string" && item.trim())
+    : [];
+  const issues = [];
+
+  if (!COMMIT_SHA_PATTERN.test(expected)) {
+    issues.push("expected SHA must be a full 40-character Git commit SHA");
+  }
+  if (health?.status !== "ok") {
+    issues.push(`health status is ${health?.status ?? "missing"}`);
+  }
+  if (!actual) {
+    issues.push("deployed health response is missing commitSha");
+  } else if (COMMIT_SHA_PATTERN.test(expected) && actual !== expected) {
+    issues.push(`deployed SHA ${actual} does not match expected SHA ${expected}`);
+  }
+  if (readiness?.status !== "ready") {
+    issues.push(`readiness status is ${readiness?.status ?? "missing"}`);
+  }
+  if (missing.length > 0) {
+    issues.push(`readiness reports missing checks: ${missing.join(", ")}`);
+  }
+
+  return {
+    ok: issues.length === 0,
+    expectedSha: expected || null,
+    actualSha: actual || null,
+    healthStatus: health?.status ?? null,
+    readinessStatus: readiness?.status ?? null,
+    missing,
+    issues,
+  };
+}
+
+export async function fetchJson(url, { fetchImpl = globalThis.fetch, timeoutMs = 10_000 } = {}) {
+  if (typeof fetchImpl !== "function") throw new Error("fetch implementation is required");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, {
+      cache: "no-store",
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
+    const body = await response.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new Error(`${url} did not return a JSON object`);
+    }
+    return body;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function verifyDeployment({
+  origin,
+  expectedSha,
+  attempts = 1,
+  delayMs = 0,
+  fetchImpl = globalThis.fetch,
+}) {
+  const normalizedOrigin = normalizeOrigin(origin);
+  const totalAttempts = Math.max(1, Number.parseInt(String(attempts), 10) || 1);
+  const pauseMs = Math.max(0, Number.parseInt(String(delayMs), 10) || 0);
+  let lastReport = null;
+
+  for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
+    try {
+      const [health, readiness] = await Promise.all([
+        fetchJson(`${normalizedOrigin}/api/health`, { fetchImpl }),
+        fetchJson(`${normalizedOrigin}/api/readiness`, { fetchImpl }),
+      ]);
+      lastReport = {
+        attempt,
+        origin: normalizedOrigin,
+        ...assessReleaseIntegrity({ expectedSha, health, readiness }),
+      };
+    } catch (error) {
+      lastReport = {
+        attempt,
+        origin: normalizedOrigin,
+        ok: false,
+        expectedSha: normalizeCommitSha(expectedSha) || null,
+        actualSha: null,
+        healthStatus: null,
+        readinessStatus: null,
+        missing: [],
+        issues: [error instanceof Error ? error.message : String(error)],
+      };
+    }
+
+    if (lastReport.ok || attempt === totalAttempts) return lastReport;
+    if (pauseMs > 0) await sleep(pauseMs);
+  }
+
+  return lastReport;
+}

@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "release:check": "node scripts/release-gate.mjs",
     "predeploy": "node scripts/predeploy.mjs",
+    "production:verify": "node scripts/verify-production.mjs",
     "predeploy:certify": "npm test && npm run lint && npm run build && npm run release:check && npm run test:e2e && npm run predeploy"
   },
   "dependencies": {
