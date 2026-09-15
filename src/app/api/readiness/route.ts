@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const REQUIRED_PHASE6_SCHEMA = "20260902034500";
 const REQUIRED_PHASE7_SCHEMA = "20260903144643";
 const REQUIRED_PHASE8_SCHEMA = "20260909043500";
-const REQUIRED_PHASE9_SCHEMA = "20260914153000";
+const REQUIRED_PHASE9_SCHEMA = "20260915032600";
 
 function record(value:unknown){return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:null;}
 
@@ -30,7 +30,7 @@ export async function GET(request:Request){
 
   let phase9:Record<string,unknown>|null=null;
   try{phase9=record(await getDeveloperPhase9Status());}catch{phase9=null;}
-  const phase9Ready=phase9?.ready===true&&phase9.schemaVersion===REQUIRED_PHASE9_SCHEMA;
+  const phase9Ready=phase9?.ready===true&&phase9.schemaVersion===REQUIRED_PHASE9_SCHEMA&&phase9.atomicKeyCap===true;
 
   let adminStatus:Record<string,unknown>|null=null;
   try{const {data,error}=await createAdminClient().rpc("ops_admin_status");if(!error)adminStatus=record(data);}catch{adminStatus=null;}
@@ -63,7 +63,7 @@ export async function GET(request:Request){
     phase6:phase6?{ready:phase6Ready,schemaVersion:phase6.schemaVersion,balanceLotMismatches:phase6.balanceLotMismatches,deletionReconciliationPending:phase6.deletionReconciliationPending,staleDeletionCancellationPending:phase6.staleDeletionCancellationPending}:null,
     phase7:phase7?{ready:phase7Ready,schemaVersion:phase7.schemaVersion}:null,
     phase8:phase8?{ready:phase8Ready,schemaVersion:phase8.schemaVersion,invoiceAuthoritativeGrants:phase8.invoiceAuthoritativeGrants,subscriptionDeletionSafety:phase8.subscriptionDeletionSafety,legacyRefundUpgrade:phase8.legacyRefundUpgrade,finopsRevenueEvidence:phase8.finopsRevenueEvidence}:null,
-    phase9:phase9?{ready:phase9Ready,schemaVersion:phase9.schemaVersion,hashedSecretsOnly:phase9.hashedSecretsOnly,verifiedAccountsOnly:phase9.verifiedAccountsOnly,revocationSupported:phase9.revocationSupported}:null,
+    phase9:phase9?{ready:phase9Ready,schemaVersion:phase9.schemaVersion,hashedSecretsOnly:phase9.hashedSecretsOnly,verifiedAccountsOnly:phase9.verifiedAccountsOnly,revocationSupported:phase9.revocationSupported,atomicKeyCap:phase9.atomicKeyCap}:null,
     admin:{ready:adminReady,ownerConfigured:adminOwnerProvisioned,bootstrapConfigured:adminBootstrapConfigured,readinessEndpoint:"/api/admin/readiness"},
   },ready?200:503,{"cache-control":"no-store"});
 }
