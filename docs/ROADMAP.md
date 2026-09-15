@@ -27,5 +27,11 @@ Private RBAC, operational rollups, cost evidence, Stripe TEST subscriptions, inv
 ## Phase 8 — release hardening ✅ source / runtime certification in progress
 Readiness contracts, deletion safety, Stripe reconciliation hardening, Admin owner bootstrap, TEST revenue/MRR evidence and exact-SHA deployment controls.
 
+## Phase 9A — production release integrity ✅ source / promotion externally gated
+Reusable exact-SHA production verification, scheduled/main-push drift detection, and deployment-workflow verification against canonical health and readiness. Production promotion remains externally gated by the GitHub Actions `VERCEL_TOKEN` credential.
+
+## Phase 9B — developer API and automation 🚧
+Verified-account API keys with hashed-secret storage, immediate revocation, machine-to-machine deterministic scan, authoritative usage balance, billable semantic transform, a zero-dependency Node CLI, and database-backed Phase 9 developer readiness evidence. Team workspaces remain a separate later wave so API identity and economic boundaries can be certified first.
+
 ## Release certification
 A release is complete only after the final branch is merged, the corresponding database migration is applied and verified, security/readiness checks pass, live Preview smoke is green, and the exact final `main` SHA is deployed and verified in Production.

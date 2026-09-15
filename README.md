@@ -2,7 +2,7 @@
 
 An **AI provenance and content-hygiene platform** inspired by clean-room observation of public product mechanics, intentionally not positioned as an AI-detector bypass product.
 
-## Implemented through Phase 8
+## Implemented through Phase 9
 
 - deterministic Unicode inspection and conservative text hygiene
 - JPEG/PNG/WebP/DOCX/PDF metadata and provenance inspection
@@ -17,6 +17,8 @@ An **AI provenance and content-hygiene platform** inspired by clean-room observa
 - server-verified Turnstile, burst limiting and database-authoritative spend limits
 - Admin Command Center with growth, usage, billing, subscription, FinOps and system evidence
 - privacy-safe operations rollups, cost evidence and release-readiness contracts
+- verified-account developer API keys with hashed-secret storage and immediate revocation
+- machine-to-machine scan, usage and billable semantic-transform APIs plus a zero-dependency Node CLI
 - request correlation IDs, structured logs, health/readiness routes and security headers
 - committed dependency lockfile, Vitest, Playwright, Supabase migration tests and exact-SHA release workflows
 
@@ -30,6 +32,7 @@ An **AI provenance and content-hygiene platform** inspired by clean-room observa
 6. Do not claim detector-proof output.
 7. Receipts over promises.
 8. Deployment evidence must match the exact release SHA.
+9. Automation credentials are server-side secrets, never browser identity.
 
 ## Runtime
 
@@ -44,8 +47,8 @@ npm run build
 npm run test:e2e
 ```
 
-The repository includes real Supabase migrations through Phase 8 and a controlled exact-SHA Vercel release workflow. Automatic Git deployments are intentionally disabled so production can only receive an explicitly certified artifact.
+The repository includes real Supabase migrations through Phase 9 and a controlled exact-SHA Vercel release workflow. Automatic Git deployments are intentionally disabled so production can only receive an explicitly certified artifact.
 
 PDF remains inspection-only; billable server file sanitation supports DOCX, PNG and JPEG. Stripe remains TEST mode until a separate explicit production-payments decision is made.
 
-See `docs/ARCHITECTURE.md`, `docs/DEPLOYMENT_READY.md`, `docs/PRODUCTION_RUNBOOK.md`, `docs/PRIVACY_ARCHITECTURE.md`, `docs/BILLING_INVARIANTS.md`, `docs/SECURITY_CHECKLIST.md`, `docs/ADMIN_CONSOLE.md`, and `docs/TESTING.md`.
+Developer API usage is documented in `docs/DEVELOPER_API.md`. See also `docs/ARCHITECTURE.md`, `docs/DEPLOYMENT_READY.md`, `docs/PRODUCTION_RUNBOOK.md`, `docs/PRIVACY_ARCHITECTURE.md`, `docs/BILLING_INVARIANTS.md`, `docs/SECURITY_CHECKLIST.md`, `docs/ADMIN_CONSOLE.md`, and `docs/TESTING.md`.
