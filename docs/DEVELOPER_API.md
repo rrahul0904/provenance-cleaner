@@ -58,9 +58,11 @@ Runs the same protected-span semantic transformation contract as the browser wor
 {
   "operationId": "8e1d8274-f4e9-44bf-98fb-2aa2b8bd2c4a",
   "text": "Text long enough to satisfy the transform contract.",
-  "mode": "sanitize"
+  "mode": "natural"
 }
 ```
+
+`mode` is one of `parity`, `natural`, `clarity`, `concise`, or `formal`.
 
 Important guarantees:
 
@@ -84,7 +86,7 @@ export PROVENANCE_API_URL='https://your-host.example'
 
 npm run provenance:cli -- usage
 npm run provenance:cli -- scan ./sample.txt conservative
-npm run provenance:cli -- transform ./sample.txt sanitize
+npm run provenance:cli -- transform ./sample.txt natural
 cat ./sample.txt | npm run provenance:cli -- scan - none
 ```
 
