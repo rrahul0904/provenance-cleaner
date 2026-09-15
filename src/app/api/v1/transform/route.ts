@@ -1,12 +1,12 @@
 import { generateText } from "ai";
 import { z } from "zod";
+import { transformOperationKey } from "@/lib/billing/operation-key";
 import { commitReservation, releaseReservation, reserveCredits } from "@/lib/billing/server";
 import { BillingDomainError } from "@/lib/billing/types";
 import { authenticateDeveloperRequest } from "@/lib/developer-api";
 import { countWords, MAX_REWRITE_WORDS } from "@/lib/product-contract";
 import { planSanitizationJob, SanitizationContractError } from "@/lib/sanitization";
 import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
-import { wordBucketKey } from "@/lib/server/buckets";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
 import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
 import {
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
 
   let reservationId: string;
   try {
-    const reservation = await reserveCredits(identity.userId, `transform:${wordBucketKey(sourceWords)}:${parsed.operationId}`, cost);
+    const reservation = await reserveCredits(identity.userId, transformOperationKey(parsed.operationId), cost);
     reservationId = reservation.reservationId;
     if (!reservation.created || reservation.status !== "reserved") return apiError(context, "operation_conflict", "This edit operation is already in progress or complete.", 409);
   } catch (error) {
