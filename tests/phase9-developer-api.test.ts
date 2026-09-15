@@ -5,6 +5,7 @@ import { DEVELOPER_API_KEY_PREFIX, developerApiKeyHash, developerBearerToken, ge
 
 const migration = readFileSync("supabase/migrations/20260914153000_phase9_developer_api.sql", "utf8");
 const hardeningMigration = readFileSync("supabase/migrations/20260914155500_phase9_developer_api_concurrency.sql", "utf8");
+const readinessHardeningMigration = readFileSync("supabase/migrations/20260915032600_phase9_developer_api_readiness_hardening.sql", "utf8");
 const accountKeys = readFileSync("src/app/api/account/api-keys/route.ts", "utf8");
 const scan = readFileSync("src/app/api/v1/scan/route.ts", "utf8");
 const transform = readFileSync("src/app/api/v1/transform/route.ts", "utf8");
@@ -49,6 +50,13 @@ describe("Phase 9 developer API", () => {
     expect(hardeningMigration).toContain("grant execute on function public.developer_api_key_create(uuid,text,text,text) to service_role");
   });
 
+  it("requires the concurrency hardening in Phase 9 readiness", () => {
+    expect(readinessHardeningMigration).toContain("'schemaVersion', '20260915032600'");
+    expect(readinessHardeningMigration).toContain("'atomicKeyCap', true");
+    expect(readiness).toContain('REQUIRED_PHASE9_SCHEMA = "20260915032600"');
+    expect(readiness).toContain("phase9.atomicKeyCap===true");
+  });
+
   it("requires a verified browser identity to manage keys", () => {
     expect(accountKeys).toContain("identity.isAnonymous || !identity.emailVerified");
     expect(accountKeys).toContain("secretShownOnce: true");
@@ -83,9 +91,9 @@ describe("Phase 9 developer API", () => {
   });
 
   it("makes the deployed Phase 9 database contract a required readiness gate", () => {
-    expect(readiness).toContain('REQUIRED_PHASE9_SCHEMA = "20260914153000"');
     expect(readiness).toContain("getDeveloperPhase9Status");
     expect(readiness).toContain("phase9Schema");
     expect(readiness).toContain("hashedSecretsOnly");
+    expect(readiness).toContain("atomicKeyCap");
   });
 });
