@@ -14,6 +14,12 @@ const integrityWorkflow = readFileSync(".github/workflows/production-integrity.y
 const releaseGate = readFileSync("scripts/release-gate.mjs", "utf8");
 const runbook = readFileSync("docs/PRODUCTION_RUNBOOK.md", "utf8");
 const security = readFileSync("docs/SECURITY_CHECKLIST.md", "utf8");
+const sourceManifestScript = readFileSync("scripts/source-manifest.mjs", "utf8");
+const sourceManifest = JSON.parse(readFileSync("release/source-manifest.json", "utf8")) as {
+  schemaVersion: number;
+  releaseId: string;
+  sourceHash: string;
+};
 
 describe("release metadata and operator contract", () => {
   it("keeps package and lockfile release versions aligned", () => {
@@ -40,20 +46,32 @@ describe("release metadata and operator contract", () => {
     expect(health).toContain("version: packageJson.version");
     expect(health).toContain("phase: 9");
     expect(health).toContain("nodeVersion: process.versions.node");
+    expect(health).toContain("sourceHash: sourceManifest.sourceHash");
+    expect(health).toContain("releaseId: sourceManifest.releaseId");
     expect(health).not.toContain('version: "0.5.1"');
     expect(health).not.toContain("phase: 8");
   });
 
-  it("documents the fail-closed exact-SHA production path", () => {
+  it("documents both certified production deployment paths", () => {
     expect(runbook).toContain("production-release");
     expect(runbook).toContain("VERCEL_TOKEN");
+    expect(runbook).toContain("OAuth direct-file deployment");
+    expect(runbook).toContain("sourceHash");
     expect(runbook).toContain("20260915032600");
-    expect(runbook).toContain("Do not bypass the workflow");
+  });
+
+  it("commits a deterministic source-manifest contract", () => {
+    expect(sourceManifest.schemaVersion).toBe(1);
+    expect(sourceManifest.releaseId).toMatch(/^pc-/u);
+    expect(sourceManifest.sourceHash).toMatch(/^[0-9a-f]{64}$/u);
+    expect(sourceManifestScript).toContain('git", ["ls-files", "-s"]');
+    expect(sourceManifestScript).toContain('path !== SOURCE_MANIFEST_PATH');
   });
 
   it("keeps unresolved external hardening visible instead of marking it complete", () => {
     expect(security).toContain("[ ] Enable Supabase Auth leaked-password protection");
-    expect(security).toContain("[ ] Add GitHub Actions `VERCEL_TOKEN`");
+    expect(security).toContain("GitHub Actions `VERCEL_TOKEN`");
+    expect(security).toContain("OAuth source-fingerprint deployment");
     expect(security).toContain("[ ] Enable GitHub branch protection/rulesets for `main`");
     expect(security).toContain("[x] Supabase migrations through Phase 9 applied and independently verified");
   });
