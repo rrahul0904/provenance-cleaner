@@ -48,12 +48,21 @@ add("Pinned dependencies",Object.values({...(packageJson.dependencies??{}),...(p
 const finalPhase6Migration="supabase/migrations/20260902034500_phase6_deletion_recovery.sql";
 const phase7Migration="supabase/migrations/20260903144643_phase7_admin_finops_subscriptions.sql";
 const finopsRevenueMigration="supabase/migrations/20260909043500_phase8_finops_revenue.sql";
+const phase9DeveloperMigration="supabase/migrations/20260914153000_phase9_developer_api.sql";
+const phase9ConcurrencyMigration="supabase/migrations/20260914155500_phase9_developer_api_concurrency.sql";
+const phase9ReadinessMigration="supabase/migrations/20260915032600_phase9_developer_api_readiness_hardening.sql";
 add("Final Phase 6 recovery migration committed",existsSync(finalPhase6Migration),finalPhase6Migration);
 if(existsSync(finalPhase6Migration)){const migration=readFileSync(finalPhase6Migration,"utf8");add("Phase 6 recovery schema version",migration.includes("'schemaVersion', '20260902034500'"),"20260902034500");add("Phase 6 stale deletion recovery",migration.includes("deletion_requested_at <= now() - interval '10 minutes'"),"failed prepare/cancel paths recover automatically");}
 add("Phase 7 control-plane migration committed",existsSync(phase7Migration),phase7Migration);
 if(existsSync(phase7Migration)){const migration=readFileSync(phase7Migration,"utf8");add("Phase 7 private ops schema",migration.includes("create schema if not exists ops"),"ops schema");add("Phase 7 admin RBAC",migration.includes("ops.admin_users")&&migration.includes("'owner', 'admin', 'viewer'"),"server-controlled roles");add("Phase 7 subscription grants",migration.includes("billing.subscription_period_grants")&&migration.includes("subscription_invoice:"),"idempotent invoice grants");}
 add("Phase 8 FinOps revenue migration committed",existsSync(finopsRevenueMigration),finopsRevenueMigration);
 if(existsSync(finopsRevenueMigration)){const migration=readFileSync(finopsRevenueMigration,"utf8");add("Privacy-safe TEST revenue evidence",migration.includes("billing_record_checkout_amount")&&migration.includes("billing_record_subscription_invoice_amount"),"integer cents + currency only");add("Phase 8 FinOps schema version",migration.includes("'schemaVersion','20260909043500'"),"20260909043500");}
+add("Phase 9 developer API migration committed",existsSync(phase9DeveloperMigration),phase9DeveloperMigration);
+if(existsSync(phase9DeveloperMigration)){const migration=readFileSync(phase9DeveloperMigration,"utf8");add("Phase 9 hashed developer keys",migration.includes("key_hash text not null unique")&&migration.includes("developer_api_key_resolve"),"hash-only key storage + resolution");add("Phase 9 verified accounts only",migration.includes("coalesce(u.is_anonymous, false) = false")&&migration.includes("email_confirmed_at is not null"),"verified registered accounts required");}
+add("Phase 9 concurrency hardening committed",existsSync(phase9ConcurrencyMigration),phase9ConcurrencyMigration);
+if(existsSync(phase9ConcurrencyMigration)){const migration=readFileSync(phase9ConcurrencyMigration,"utf8");add("Phase 9 atomic key cap",migration.includes("for update")&&migration.includes("count(*) from ops.developer_api_keys"),"per-user create serialization before cap check");}
+add("Phase 9 readiness hardening committed",existsSync(phase9ReadinessMigration),phase9ReadinessMigration);
+if(existsSync(phase9ReadinessMigration)){const migration=readFileSync(phase9ReadinessMigration,"utf8");add("Phase 9 readiness schema version",migration.includes("'schemaVersion', '20260915032600'")&&migration.includes("'atomicKeyCap', true"),"20260915032600");}
 
 const readinessPath="src/app/api/readiness/route.ts";
 if(existsSync(readinessPath)){
@@ -61,10 +70,12 @@ if(existsSync(readinessPath)){
   add("Readiness requires final Phase 6",readiness.includes('REQUIRED_PHASE6_SCHEMA = "20260902034500"'),"exact Phase 6 schema required");
   add("Readiness requires final Phase 7",readiness.includes('REQUIRED_PHASE7_SCHEMA = "20260903144643"')&&readiness.includes("phase7Schema"),"exact Phase 7 schema required");
   add("Readiness requires final Phase 8",readiness.includes('REQUIRED_PHASE8_SCHEMA = "20260909043500"')&&readiness.includes("phase8Schema"),"exact Phase 8 FinOps schema required");
+  add("Readiness requires final Phase 9",readiness.includes('REQUIRED_PHASE9_SCHEMA = "20260915032600"')&&readiness.includes("phase9Schema")&&readiness.includes("atomicKeyCap"),"exact Phase 9 developer API schema required");
 }else{
   add("Readiness requires final Phase 6",false,"readiness route missing");
   add("Readiness requires final Phase 7",false,"readiness route missing");
   add("Readiness requires final Phase 8",false,"readiness route missing");
+  add("Readiness requires final Phase 9",false,"readiness route missing");
 }
 
 for(const item of checks)console.log(`${item.ok?"PASS":"FAIL"} ${item.name} — ${item.detail}`);
