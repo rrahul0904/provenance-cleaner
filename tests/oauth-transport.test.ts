@@ -17,6 +17,10 @@ describe("OAuth production transport", () => {
   it("requires the transport source hash to match the certified manifest", () => {
     expect(unpacker).toContain("bundleHash !== expectedSourceHash");
     expect(unpacker).toContain("OAuth transport bundle failed certification");
+    expect(unpacker).toContain("gitBlobSha(entry.data)");
+    expect(unpacker).toContain("actualBlobSha !== declaredBlobSha");
+    expect(unpacker).toContain("sourceFingerprint(sourceEntries)");
+    expect(unpacker).toContain("actualSourceHash !== expectedSourceHash");
   });
 
   it("rejects traversal and protects release bootstrap files from bundle overwrite", () => {
@@ -25,6 +29,7 @@ describe("OAuth production transport", () => {
     expect(unpacker).toContain('"package-lock.json"');
     expect(unpacker).toContain('"release/source-manifest.json"');
     expect(unpacker).toContain('"release/oauth-unpack.mjs"');
+    expect(unpacker).toContain("seenPaths.has(normalized)");
   });
 
   it("removes transport parts before Next.js build continues", () => {
