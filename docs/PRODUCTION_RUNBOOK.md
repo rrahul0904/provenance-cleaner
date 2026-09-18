@@ -2,18 +2,35 @@
 
 ## Deploy
 
-Production deploys are exact-SHA and fail closed.
+Production deploys are source-certified and fail closed. Git-backed CLI deploys use the exact Git SHA plus the source fingerprint; OAuth direct-file deploys use the same certified source fingerprint when Vercel does not expose Git SHA metadata.
 
 1. Confirm `main` and `production-release` point to the same certified commit.
-2. Confirm the GitHub `production` environment contains `VERCEL_TOKEN` with deployment access to the configured Vercel team/project.
+2. Run `npm run release:manifest:check`; `release/source-manifest.json` must match every tracked Git blob except the manifest itself.
 3. Confirm Supabase Phase 6–9 readiness, including Phase 9 schema `20260915032600` with `atomicKeyCap: true`.
 4. Confirm Stripe remains TEST mode unless a separate production-payment decision has been approved.
-5. Push the certified SHA to `production-release` or dispatch `deploy-production` with that exact SHA.
-6. The workflow must rerun preflight, release gate, unit tests, lint, build, Playwright E2E, migration safety, and then deploy one prebuilt Vercel Production artifact.
-7. Verify the deployed `/api/health` returns the exact expected commit SHA and Phase 9 metadata.
-8. Verify `/api/readiness` returns `ready` with no required checks missing.
+5. Use one of the two authorized release paths below.
+6. Verify `/api/health` reports the certified `sourceHash`, release ID, Phase 9, and Node 24.x. If Git SHA metadata exists, it must also equal the certified commit.
+7. Verify `/api/readiness` returns `ready` with no required checks missing.
 
-Do not bypass the workflow with an ad-hoc production deployment merely to clear an integrity check.
+### Path A — GitHub Actions exact-SHA deployment
+
+Use this path when the GitHub `production` environment contains `VERCEL_TOKEN`.
+
+- Push the certified SHA to `production-release` or dispatch `deploy-production` with that exact SHA.
+- The workflow reruns preflight, release gate, unit tests, lint, build, Playwright E2E and migration safety, then deploys one prebuilt Production artifact.
+- Verification requires both the exact Git SHA and the certified source fingerprint.
+
+### Path B — OAuth direct-file deployment
+
+Use this path through the connected Vercel OAuth deployment tool when a CI deployment token is intentionally unavailable.
+
+- Materialize the deployment payload byte-for-byte from the exact certified GitHub commit. Do not use an edited local working tree.
+- Deploy those source files to the existing `provenance-cleaner` Vercel project with target `production`.
+- Direct-file deployments may not expose `VERCEL_GIT_COMMIT_SHA`; in that case production certification uses the committed `sourceHash`.
+- The source fingerprint is not optional: production verification fails if it is absent or differs from the certified manifest.
+- Record the deployment ID/URL and run the same health/readiness verification immediately after deployment.
+
+Do not deploy modified or untracked application source merely to clear an integrity check.
 
 ## Rollback
 
