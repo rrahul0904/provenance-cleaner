@@ -7,6 +7,7 @@ import "./quiet-forensics.css";
 import "./quiet-forensics-refinement.css";
 import "./account-forensics.css";
 import "./admin-forensics.css";
+import "./artifact-provenance.css";
 import "./product-shell.css";
 
 export const metadata: Metadata = {
