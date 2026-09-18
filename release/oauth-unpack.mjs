@@ -5,12 +5,10 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "
 import { dirname, posix } from "node:path";
 
 const MANIFEST_PATH = "release/source-manifest.json";
-const TRANSPORT_PATHS = [
-  "release/oauth-bundle-1.json",
-  "release/oauth-bundle-2.json",
-  "release/oauth-bundle-3.json",
-  "release/oauth-bundle-4.json",
-];
+const TRANSPORT_PATHS = Array.from(
+  { length: 16 },
+  (_, index) => `release/oauth-bundle-${index + 1}.json`,
+);
 const DIRECT_SOURCE_PATHS = [
   "package.json",
   "package-lock.json",
