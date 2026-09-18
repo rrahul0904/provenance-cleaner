@@ -6,7 +6,7 @@ import { dirname, posix } from "node:path";
 
 const MANIFEST_PATH = "release/source-manifest.json";
 const TRANSPORT_PATHS = Array.from(
-  { length: 16 },
+  { length: 14 },
   (_, index) => `release/oauth-bundle-${index + 1}.json`,
 );
 const DIRECT_SOURCE_PATHS = [
