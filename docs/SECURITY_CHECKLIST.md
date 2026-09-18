@@ -25,7 +25,8 @@
 - [x] Service worker excludes `/api/*` from offline caching.
 - [x] Chrome extension stores preferences/API key only; selected source/result text is memory-only.
 - [ ] Enable Supabase Auth leaked-password protection before broad public rollout.
-- [ ] Add GitHub Actions `VERCEL_TOKEN` to the `production` environment, then complete exact-SHA Production deployment certification.
+- [x] Production has a tokenless authorized fallback: OAuth source-fingerprint deployment from the exact certified GitHub tree.
+- [ ] Add GitHub Actions `VERCEL_TOKEN` to the `production` environment if automated CLI deployments are desired; this is no longer a Production launch blocker.
 - [ ] Enable GitHub branch protection/rulesets for `main` with required CI checks and pull-request review; the current branch is not protected.
 - [ ] Activate an Admin owner/bootstrap identity when operational Admin access is required; this is intentionally non-blocking for customer-facing readiness.
 
