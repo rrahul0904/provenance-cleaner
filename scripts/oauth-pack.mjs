@@ -25,6 +25,24 @@ function gitBlobSha(content) {
     .digest("hex");
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, item]) => [key, canonicalJson(item)]),
+    );
+  }
+  return value;
+}
+
+function canonicalJsonSha256(content) {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalJson(JSON.parse(content))), "utf8")
+    .digest("hex");
+}
+
 function trackedEntries() {
   const output = execFileSync("git", ["ls-files", "-s"], { encoding: "utf8" });
   return output
@@ -74,6 +92,7 @@ for (const { path, sha } of entries) {
   });
 }
 
+const bootstrap = [];
 for (const path of DIRECT_SOURCE_PATHS) {
   const entry = entries.find((item) => item.path === path);
   if (!entry) throw new Error(`OAuth packer missing required direct source file: ${path}`);
@@ -81,6 +100,11 @@ for (const path of DIRECT_SOURCE_PATHS) {
   if (gitBlobSha(data) !== entry.sha) {
     throw new Error(`OAuth packer direct file differs from the Git index: ${path}`);
   }
+  bootstrap.push({
+    path,
+    blobSha: entry.sha,
+    ...(path === "vercel.json" ? { canonicalJsonSha256: canonicalJsonSha256(data) } : {}),
+  });
 }
 
 const bins = Array.from({ length: TRANSPORT_PATHS.length }, () => ({
@@ -96,8 +120,9 @@ for (const file of [...sourceFiles].sort((a, b) => b.bytes - a.bytes)) {
 
 bins.forEach((bin, index) => {
   const payload = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sourceHash: certification.sourceHash,
+    bootstrap,
     files: bin.files.map(({ path, blobSha, data }) => ({ path, blobSha, data })),
   };
   writeFileSync(TRANSPORT_PATHS[index], JSON.stringify(payload), "utf8");
