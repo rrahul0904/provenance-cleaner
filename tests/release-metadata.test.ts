@@ -29,6 +29,10 @@ describe("release metadata and operator contract", () => {
       expect(workflow).toContain("node-version: 24.x");
       expect(workflow).not.toContain("node-version: 22.22.0");
     }
+    for (const workflow of [ci, readinessWorkflow]) {
+      expect(workflow).toContain("cancel-in-progress: true");
+      expect(workflow).toContain("github.event.pull_request.number || github.ref");
+    }
     expect(releaseGate).toContain('add("Node 24.x"');
   });
 
