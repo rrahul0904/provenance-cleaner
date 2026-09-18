@@ -54,8 +54,10 @@ function stableValue(value: unknown): unknown {
   return value;
 }
 
-export function stableStringify(value: unknown) {
-  return JSON.stringify(stableValue(value));
+export function stableStringify(value: unknown): string {
+  const result = JSON.stringify(stableValue(value));
+  if (result === undefined) throw new Error("Artifact value cannot be canonically serialized.");
+  return result;
 }
 
 export function canonicalizeArtifact(input: string, kind: ArtifactKind) {
