@@ -1,6 +1,7 @@
 import { apiOk, requestContext } from "@/lib/server/api";
 import { trackHealth } from "@/lib/server/pulseatlas";
 import packageJson from "../../../../package.json";
+import sourceManifest from "../../../../release/source-manifest.json";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,15 @@ export async function GET(request: Request) {
   void trackHealth("ok");
   return apiOk(
     context,
-    { status: "ok", version: packageJson.version, phase: 9, commitSha, nodeVersion: process.versions.node },
+    {
+      status: "ok",
+      version: packageJson.version,
+      phase: 9,
+      commitSha,
+      sourceHash: sourceManifest.sourceHash,
+      releaseId: sourceManifest.releaseId,
+      nodeVersion: process.versions.node,
+    },
     200,
     { "cache-control": "no-store" },
   );
