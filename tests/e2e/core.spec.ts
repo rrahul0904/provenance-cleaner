@@ -83,7 +83,7 @@ test("artifact provenance creates and re-verifies a local integrity receipt", as
   await expect(artifact.getByRole("heading", { name: "Hash the artifact. Verify the receipt." })).toBeVisible();
   await artifact.getByRole("button", { name: "Generate local receipt" }).click();
   await expect(artifact.getByText("Receipt generated")).toBeVisible();
-  await expect(artifact.getByText("Artifact SHA-256")).toBeVisible();
+  await expect(artifact.getByText("Artifact SHA-256", { exact: true })).toBeVisible();
   await artifact.getByRole("button", { name: "Verify artifact + receipt" }).click();
   await expect(artifact.getByText("Integrity verified")).toBeVisible();
 });
