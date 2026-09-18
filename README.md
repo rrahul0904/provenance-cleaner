@@ -39,7 +39,7 @@ An **AI provenance and content-hygiene platform** inspired by clean-room observa
 
 ## Runtime
 
-Node.js 22.22 or later.
+Node.js 24.x, matching the configured Vercel build/function runtime.
 
 ```bash
 npm ci
