@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   void trackHealth("ok");
   return apiOk(
     context,
-    { status: "ok", version: packageJson.version, phase: 9, commitSha },
+    { status: "ok", version: packageJson.version, phase: 9, commitSha, nodeVersion: process.versions.node },
     200,
     { "cache-control": "no-store" },
   );
