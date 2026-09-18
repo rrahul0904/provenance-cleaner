@@ -25,7 +25,8 @@ Use this path when the GitHub `production` environment contains `VERCEL_TOKEN`.
 Use this path through the connected Vercel OAuth deployment tool when a CI deployment token is intentionally unavailable.
 
 - Materialize the deployment payload byte-for-byte from the exact certified GitHub commit. Do not use an edited local working tree.
-- Deploy those source files to the existing `provenance-cleaner` Vercel project with target `production`.
+- When the OAuth inlined-file API cannot accept the full tree in one orchestration, package build files into `release/oauth-bundle-*.json` transport parts. Every part must carry the certified `sourceHash` and every file carries its Git blob SHA. `release/oauth-unpack.mjs` recomputes each Git blob SHA and the complete tracked-source fingerprint, and rejects missing/altered/duplicate/injected paths or traversal before the Next.js build.
+- Send the exact committed `package.json`, `package-lock.json`, `release/source-manifest.json`, `release/oauth-unpack.mjs`, and generated certified bundle parts to the existing `provenance-cleaner` Vercel project with target `production`.
 - Direct-file deployments may not expose `VERCEL_GIT_COMMIT_SHA`; in that case production certification uses the committed `sourceHash`.
 - The source fingerprint is not optional: production verification fails if it is absent or differs from the certified manifest.
 - Record the deployment ID/URL and run the same health/readiness verification immediately after deployment.
