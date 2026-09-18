@@ -25,6 +25,24 @@ function gitBlobSha(content) {
     .digest("hex");
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, item]) => [key, canonicalJson(item)]),
+    );
+  }
+  return value;
+}
+
+function canonicalJsonSha256(content) {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalJson(JSON.parse(content))), "utf8")
+    .digest("hex");
+}
+
 function sourceFingerprint(entries) {
   const hash = createHash("sha256");
   for (const { path, blobSha } of [...entries].sort((a, b) => a.path.localeCompare(b.path))) {
@@ -49,21 +67,59 @@ if (!/^[0-9a-f]{64}$/u.test(expectedSourceHash)) {
   throw new Error("OAuth transport requires a valid certified source manifest.");
 }
 
+const firstBundle = JSON.parse(readFileSync(bundlePaths[0], "utf8"));
+if (
+  firstBundle?.schemaVersion !== 2 ||
+  String(firstBundle?.sourceHash ?? "").trim().toLowerCase() !== expectedSourceHash ||
+  !Array.isArray(firstBundle.bootstrap)
+) {
+  throw new Error("OAuth transport bootstrap certification is invalid.");
+}
+
+const bootstrapJson = JSON.stringify(firstBundle.bootstrap);
+const bootstrapMap = new Map(firstBundle.bootstrap.map((entry) => [entry?.path, entry]));
+if (bootstrapMap.size !== DIRECT_SOURCE_PATHS.length) {
+  throw new Error("OAuth transport bootstrap certification has an invalid file count.");
+}
+
 const sourceEntries = [];
 const seenPaths = new Set();
 let written = 0;
 
 for (const directPath of DIRECT_SOURCE_PATHS) {
-  if (!existsSync(directPath)) throw new Error(`OAuth transport missing direct certified file: ${directPath}`);
+  const expected = bootstrapMap.get(directPath);
+  if (
+    !expected ||
+    !/^[0-9a-f]{40}$/u.test(String(expected.blobSha ?? "")) ||
+    !existsSync(directPath)
+  ) {
+    throw new Error(`OAuth transport missing direct certified file: ${directPath}`);
+  }
+
   const data = readFileSync(directPath, "utf8");
-  sourceEntries.push({ path: directPath, blobSha: gitBlobSha(data) });
+  if (directPath === "vercel.json") {
+    const expectedCanonical = String(expected.canonicalJsonSha256 ?? "").trim().toLowerCase();
+    const actualCanonical = canonicalJsonSha256(data);
+    if (!/^[0-9a-f]{64}$/u.test(expectedCanonical) || actualCanonical !== expectedCanonical) {
+      throw new Error("OAuth transport canonical Vercel configuration integrity failed.");
+    }
+  } else if (gitBlobSha(data) !== expected.blobSha) {
+    throw new Error(`OAuth transport bootstrap blob integrity failed: ${directPath}`);
+  }
+
+  sourceEntries.push({ path: directPath, blobSha: expected.blobSha });
   seenPaths.add(directPath);
 }
 
 for (const bundlePath of bundlePaths) {
   const bundle = JSON.parse(readFileSync(bundlePath, "utf8"));
   const bundleHash = String(bundle?.sourceHash ?? "").trim().toLowerCase();
-  if (bundle?.schemaVersion !== 1 || bundleHash !== expectedSourceHash || !Array.isArray(bundle.files)) {
+  if (
+    bundle?.schemaVersion !== 2 ||
+    bundleHash !== expectedSourceHash ||
+    JSON.stringify(bundle.bootstrap) !== bootstrapJson ||
+    !Array.isArray(bundle.files)
+  ) {
     throw new Error(`OAuth transport bundle failed certification: ${bundlePath}`);
   }
 
