@@ -2,13 +2,16 @@
 
 An **AI provenance and content-hygiene platform** inspired by clean-room observation of public product mechanics, intentionally not positioned as an AI-detector bypass product.
 
-## Implemented through Phase 9
+## Implemented through Phase 9 + local-first/provenance extensions
 
 - deterministic Unicode inspection and conservative text hygiene
 - JPEG/PNG/WebP/DOCX/PDF metadata and provenance inspection
 - server-authoritative DOCX/PNG/JPEG sanitation with post-clean verification
 - official C2PA verification, SHA-256 receipts and provenance-safe modification guardrails
-- semantics-preserving AI editing with protected facts, bounded retries and deterministic validation
+- semantics-preserving AI editing with protected facts, bounded retries, deterministic validation, purpose-aware controls, rewrite intensity, guest no-login flow and undo
+- local-first scanner shell with offline inspection/receipt export and no API-response caching
+- canonical artifact/agent-skill SHA-256 identity, self-hashed receipts, hygiene checks and optional version-chain links
+- Manifest V3 Chrome safe editor using the developer transform API with in-page replacement and memory-only undo
 - Supabase anonymous/registered account architecture with upgrade-preserving credit history
 - append-only FIFO credits with atomic reserve/commit/release/expiry semantics
 - Stripe TEST one-time Checkout, webhook reconciliation and proportional unused-credit refunds
@@ -51,4 +54,4 @@ The repository includes real Supabase migrations through Phase 9 and a controlle
 
 PDF remains inspection-only; billable server file sanitation supports DOCX, PNG and JPEG. Stripe remains TEST mode until a separate explicit production-payments decision is made.
 
-Developer API usage is documented in `docs/DEVELOPER_API.md`. See also `docs/ARCHITECTURE.md`, `docs/DEPLOYMENT_READY.md`, `docs/PRODUCTION_RUNBOOK.md`, `docs/PRIVACY_ARCHITECTURE.md`, `docs/BILLING_INVARIANTS.md`, `docs/SECURITY_CHECKLIST.md`, `docs/ADMIN_CONSOLE.md`, and `docs/TESTING.md`.
+Developer API usage is documented in `docs/DEVELOPER_API.md`. The unpacked Chrome extension is in `extension/chrome`. See also `docs/ARCHITECTURE.md`, `docs/DEPLOYMENT_READY.md`, `docs/PRODUCTION_RUNBOOK.md`, `docs/PRIVACY_ARCHITECTURE.md`, `docs/BILLING_INVARIANTS.md`, `docs/SECURITY_CHECKLIST.md`, `docs/ADMIN_CONSOLE.md`, and `docs/TESTING.md`.
