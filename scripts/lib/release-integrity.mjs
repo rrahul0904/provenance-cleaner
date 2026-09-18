@@ -1,4 +1,5 @@
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/iu;
+const REQUIRED_NODE_MAJOR = 24;
 
 export function normalizeOrigin(value) {
   const raw = String(value ?? "").trim();
@@ -17,6 +18,8 @@ export function normalizeCommitSha(value) {
 export function assessReleaseIntegrity({ expectedSha, health, readiness }) {
   const expected = normalizeCommitSha(expectedSha);
   const actual = normalizeCommitSha(health?.commitSha);
+  const nodeVersion = String(health?.nodeVersion ?? "").trim();
+  const nodeMajor = Number.parseInt(nodeVersion.split(".")[0] ?? "", 10);
   const missing = Array.isArray(readiness?.missing)
     ? readiness.missing.filter((item) => typeof item === "string" && item.trim())
     : [];
@@ -33,6 +36,11 @@ export function assessReleaseIntegrity({ expectedSha, health, readiness }) {
   } else if (COMMIT_SHA_PATTERN.test(expected) && actual !== expected) {
     issues.push(`deployed SHA ${actual} does not match expected SHA ${expected}`);
   }
+  if (!nodeVersion) {
+    issues.push("deployed health response is missing nodeVersion");
+  } else if (nodeMajor !== REQUIRED_NODE_MAJOR) {
+    issues.push(`deployed Node.js major ${Number.isFinite(nodeMajor) ? nodeMajor : "invalid"} does not match required major ${REQUIRED_NODE_MAJOR}`);
+  }
   if (readiness?.status !== "ready") {
     issues.push(`readiness status is ${readiness?.status ?? "missing"}`);
   }
@@ -45,6 +53,7 @@ export function assessReleaseIntegrity({ expectedSha, health, readiness }) {
     expectedSha: expected || null,
     actualSha: actual || null,
     healthStatus: health?.status ?? null,
+    nodeVersion: nodeVersion || null,
     readinessStatus: readiness?.status ?? null,
     missing,
     issues,
@@ -107,6 +116,7 @@ export async function verifyDeployment({
         expectedSha: normalizeCommitSha(expectedSha) || null,
         actualSha: null,
         healthStatus: null,
+        nodeVersion: null,
         readinessStatus: null,
         missing: [],
         issues: [error instanceof Error ? error.message : String(error)],
