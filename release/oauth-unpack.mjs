@@ -44,12 +44,16 @@ function sameJson(left, right) {
 function assertVercelConfigCompatible(actualContent, certifiedContent) {
   const actual = JSON.parse(actualContent);
   const certified = JSON.parse(certifiedContent);
-  const allowedTopLevel = new Set(["$schema", "installCommand", "git", "crons", "framework"]);
+  const allowedTopLevel = new Set(["$schema", "name", "installCommand", "git", "crons", "framework"]);
 
   for (const key of Object.keys(actual)) {
     if (!allowedTopLevel.has(key)) {
       throw new Error(`OAuth transport rejected unexpected Vercel configuration key: ${key}`);
     }
+  }
+
+  if (actual.name !== undefined && actual.name !== "provenance-cleaner") {
+    throw new Error("OAuth transport Vercel project name integrity failed.");
   }
 
   if (actual.installCommand !== certified.installCommand) {
