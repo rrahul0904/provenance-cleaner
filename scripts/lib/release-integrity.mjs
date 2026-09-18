@@ -1,4 +1,5 @@
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/iu;
+const SOURCE_HASH_PATTERN = /^[0-9a-f]{64}$/iu;
 const REQUIRED_NODE_MAJOR = 24;
 
 export function normalizeOrigin(value) {
@@ -15,9 +16,16 @@ export function normalizeCommitSha(value) {
   return String(value ?? "").trim().toLowerCase();
 }
 
-export function assessReleaseIntegrity({ expectedSha, health, readiness }) {
+export function normalizeSourceHash(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+export function assessReleaseIntegrity({ expectedSha, expectedSourceHash, health, readiness }) {
   const expected = normalizeCommitSha(expectedSha);
   const actual = normalizeCommitSha(health?.commitSha);
+  const expectedSource = normalizeSourceHash(expectedSourceHash);
+  const actualSource = normalizeSourceHash(health?.sourceHash);
+  const releaseId = String(health?.releaseId ?? "").trim();
   const nodeVersion = String(health?.nodeVersion ?? "").trim();
   const nodeMajor = Number.parseInt(nodeVersion.split(".")[0] ?? "", 10);
   const missing = Array.isArray(readiness?.missing)
@@ -28,13 +36,26 @@ export function assessReleaseIntegrity({ expectedSha, health, readiness }) {
   if (!COMMIT_SHA_PATTERN.test(expected)) {
     issues.push("expected SHA must be a full 40-character Git commit SHA");
   }
+  if (!SOURCE_HASH_PATTERN.test(expectedSource)) {
+    issues.push("expected source hash must be a 64-character SHA-256 value");
+  }
   if (health?.status !== "ok") {
     issues.push(`health status is ${health?.status ?? "missing"}`);
   }
-  if (!actual) {
-    issues.push("deployed health response is missing commitSha");
-  } else if (COMMIT_SHA_PATTERN.test(expected) && actual !== expected) {
-    issues.push(`deployed SHA ${actual} does not match expected SHA ${expected}`);
+  if (!actualSource) {
+    issues.push("deployed health response is missing sourceHash");
+  } else if (SOURCE_HASH_PATTERN.test(expectedSource) && actualSource !== expectedSource) {
+    issues.push(`deployed source hash ${actualSource} does not match expected source hash ${expectedSource}`);
+  }
+  if (actual) {
+    if (!COMMIT_SHA_PATTERN.test(actual)) {
+      issues.push("deployed commitSha is not a full 40-character Git commit SHA");
+    } else if (COMMIT_SHA_PATTERN.test(expected) && actual !== expected) {
+      issues.push(`deployed SHA ${actual} does not match expected SHA ${expected}`);
+    }
+  }
+  if (!releaseId) {
+    issues.push("deployed health response is missing releaseId");
   }
   if (!nodeVersion) {
     issues.push("deployed health response is missing nodeVersion");
@@ -50,8 +71,12 @@ export function assessReleaseIntegrity({ expectedSha, health, readiness }) {
 
   return {
     ok: issues.length === 0,
+    verificationMode: actual ? "commit-sha+source-hash" : "source-hash",
     expectedSha: expected || null,
     actualSha: actual || null,
+    expectedSourceHash: expectedSource || null,
+    actualSourceHash: actualSource || null,
+    releaseId: releaseId || null,
     healthStatus: health?.status ?? null,
     nodeVersion: nodeVersion || null,
     readinessStatus: readiness?.status ?? null,
@@ -88,6 +113,7 @@ function sleep(ms) {
 export async function verifyDeployment({
   origin,
   expectedSha,
+  expectedSourceHash,
   attempts = 1,
   delayMs = 0,
   fetchImpl = globalThis.fetch,
@@ -106,15 +132,19 @@ export async function verifyDeployment({
       lastReport = {
         attempt,
         origin: normalizedOrigin,
-        ...assessReleaseIntegrity({ expectedSha, health, readiness }),
+        ...assessReleaseIntegrity({ expectedSha, expectedSourceHash, health, readiness }),
       };
     } catch (error) {
       lastReport = {
         attempt,
         origin: normalizedOrigin,
         ok: false,
+        verificationMode: null,
         expectedSha: normalizeCommitSha(expectedSha) || null,
         actualSha: null,
+        expectedSourceHash: normalizeSourceHash(expectedSourceHash) || null,
+        actualSourceHash: null,
+        releaseId: null,
         healthStatus: null,
         nodeVersion: null,
         readinessStatus: null,
