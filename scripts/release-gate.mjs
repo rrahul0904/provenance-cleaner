@@ -7,7 +7,7 @@ const placeholderEmail=/(^|@)(example\.(com|invalid|org)|invalid|localhost)$|pla
 const validOperationalEmail=(value)=>emailPattern.test(value)&&!placeholderEmail.test(value);
 const validUuid=(value)=>/^[0-9a-f]{8}-[0-9a-f-]{27,}$/iu.test(value);
 
-add("Node >= 22.22",(()=>{const [major,minor]=process.versions.node.split(".").map(Number);return major>22||(major===22&&minor>=22);})(),process.versions.node);
+add("Node 24.x",(()=>{const [major]=process.versions.node.split(".").map(Number);return major===24;})(),process.versions.node);
 add("package-lock.json committed",existsSync("package-lock.json"),existsSync("package-lock.json")?"present":"missing");
 
 const requiredClient=["NEXT_PUBLIC_TURNSTILE_SITE_KEY","NEXT_PUBLIC_SUPPORT_EMAIL"];
