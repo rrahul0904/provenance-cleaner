@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "node release/oauth-unpack.mjs && npm install",
   "git": {
     "deploymentEnabled": false
   },
