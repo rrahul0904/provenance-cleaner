@@ -5,6 +5,10 @@ on:
     branches: [main, "phase-*"]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -16,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.22.0
+          node-version: 24.x
       - name: Require committed lockfile
         run: test -f package-lock.json
       - name: Install pinned dependencies
@@ -60,7 +64,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.22.0
+          node-version: 24.x
       - name: Require committed lockfile
         run: test -f package-lock.json
       - run: npm ci --no-audit --no-fund

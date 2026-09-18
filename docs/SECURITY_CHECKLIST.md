@@ -1,21 +1,31 @@
 # Security checklist
 
-- [x] RLS enabled on Phase 4 billing tables.
-- [x] Billing tables live in non-public `billing` schema.
-- [x] Elevated RPCs use fixed empty `search_path` and are revoked from public/anon/authenticated.
+- [x] RLS enabled on private billing/ops tables.
+- [x] Billing and operations tables live in non-public schemas.
+- [x] Elevated RPCs use fixed empty `search_path` and are revoked from public/anon/authenticated unless explicitly required.
 - [x] No authorization uses user-editable `user_metadata`.
-- [x] Browser cannot grant credits, select Stripe prices, mutate ledger rows or complete purchases.
+- [x] Browser cannot grant credits, select arbitrary Stripe prices, mutate ledger rows or complete purchases.
 - [x] Ledger update/delete blocked by trigger.
 - [x] Webhook signature verified over raw body before processing.
-- [x] Phase 5 blocks live Stripe server keys.
+- [x] Controlled launch blocks live Stripe server keys.
 - [x] Guest/edit/Checkout protected by server-side Turnstile verification.
-- [x] Production bypass for Turnstile is impossible through the documented flags.
+- [x] Production Turnstile bypass is impossible through documented flags.
 - [x] API payload size/content type/schema validation centralized.
 - [x] Request IDs returned without exposing stack traces/provider errors.
 - [x] Raw text/files/cookies/tokens/IPs excluded from application logs.
 - [x] CSP restricts framing/object sources and permits only required Turnstile/WASM behavior.
-- [ ] Apply SQL only after a dedicated provenance-cleaner Supabase project is identified.
-- [ ] Run Supabase security and performance advisors after application.
-- [ ] Generate and commit package-lock, then switch CI to npm ci.
-- [ ] Verify CI on an assigned GitHub hosted runner.
-- [ ] Verify Vercel preview and browser smoke tests after project import.
+- [x] Dedicated provenance-cleaner Supabase project identified and verified.
+- [x] Supabase migrations through Phase 9 applied and independently verified.
+- [x] Phase 9 developer API keys persist hashes only, require verified accounts, support revocation, and enforce an atomic active-key cap.
+- [x] Supabase security advisors reviewed after Phase 9 verification.
+- [x] `package-lock.json` committed and CI uses `npm ci`.
+- [x] CI verified on GitHub-hosted runners.
+- [x] Full Playwright browser suite and deployment-readiness certification verified.
+- [x] Exact-SHA Vercel production workflow fails closed when deployment credentials are missing.
+- [x] Service worker excludes `/api/*` from offline caching.
+- [x] Chrome extension stores preferences/API key only; selected source/result text is memory-only.
+- [ ] Enable Supabase Auth leaked-password protection before broad public rollout.
+- [ ] Add GitHub Actions `VERCEL_TOKEN` to the `production` environment, then complete exact-SHA Production deployment certification.
+- [ ] Enable GitHub branch protection/rulesets for `main` with required CI checks and pull-request review; the current branch is not protected.
+- [ ] Activate an Admin owner/bootstrap identity when operational Admin access is required; this is intentionally non-blocking for customer-facing readiness.
+

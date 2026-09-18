@@ -10,6 +10,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -23,7 +27,7 @@ jobs:
           ref: ${{ inputs.expected_sha || github.event.pull_request.head.sha }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.22.0
+          node-version: 24.x
       - run: test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha || github.event.pull_request.head.sha }}"
       - run: npm ci --no-audit --no-fund
       - run: npm test

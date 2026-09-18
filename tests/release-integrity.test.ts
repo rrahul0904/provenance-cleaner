@@ -11,7 +11,7 @@ describe("release integrity", () => {
   it("accepts an exact SHA with healthy ready responses", () => {
     const result = assessReleaseIntegrity({
       expectedSha: SHA,
-      health: { status: "ok", commitSha: SHA },
+      health: { status: "ok", commitSha: SHA, nodeVersion: "24.11.0" },
       readiness: { status: "ready", missing: [] },
     });
 
@@ -23,7 +23,7 @@ describe("release integrity", () => {
   it("rejects a deployment that omits commitSha", () => {
     const result = assessReleaseIntegrity({
       expectedSha: SHA,
-      health: { status: "ok", commitSha: null },
+      health: { status: "ok", commitSha: null, nodeVersion: "24.11.0" },
       readiness: { status: "ready", missing: [] },
     });
 
@@ -35,7 +35,7 @@ describe("release integrity", () => {
     const stale = "9f402bb990dbbe329934113ac04bc2f2b1b903c3";
     const result = assessReleaseIntegrity({
       expectedSha: SHA,
-      health: { status: "ok", commitSha: stale },
+      health: { status: "ok", commitSha: stale, nodeVersion: "24.11.0" },
       readiness: { status: "ready", missing: [] },
     });
 
@@ -44,10 +44,22 @@ describe("release integrity", () => {
     expect(result.issues.some((issue: string) => issue.includes("does not match expected SHA"))).toBe(true);
   });
 
+  it("rejects a deployed runtime outside Node 24", () => {
+    const result = assessReleaseIntegrity({
+      expectedSha: SHA,
+      health: { status: "ok", commitSha: SHA, nodeVersion: "22.22.0" },
+      readiness: { status: "ready", missing: [] },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.nodeVersion).toBe("22.22.0");
+    expect(result.issues).toContain("deployed Node.js major 22 does not match required major 24");
+  });
+
   it("rejects readiness failures even when SHA matches", () => {
     const result = assessReleaseIntegrity({
       expectedSha: SHA,
-      health: { status: "ok", commitSha: SHA },
+      health: { status: "ok", commitSha: SHA, nodeVersion: "24.11.0" },
       readiness: { status: "not_ready", missing: ["cron", "phase8Schema"] },
     });
 
