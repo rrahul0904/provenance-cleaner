@@ -26,5 +26,6 @@
 - [x] Chrome extension stores preferences/API key only; selected source/result text is memory-only.
 - [ ] Enable Supabase Auth leaked-password protection before broad public rollout.
 - [ ] Add GitHub Actions `VERCEL_TOKEN` to the `production` environment, then complete exact-SHA Production deployment certification.
+- [ ] Enable GitHub branch protection/rulesets for `main` with required CI checks and pull-request review; the current branch is not protected.
 - [ ] Activate an Admin owner/bootstrap identity when operational Admin access is required; this is intentionally non-blocking for customer-facing readiness.
 
