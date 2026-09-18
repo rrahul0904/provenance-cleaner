@@ -39,6 +39,7 @@ describe("release metadata and operator contract", () => {
   it("reports Phase 9 health and derives the application version from package metadata", () => {
     expect(health).toContain("version: packageJson.version");
     expect(health).toContain("phase: 9");
+    expect(health).toContain("nodeVersion: process.versions.node");
     expect(health).not.toContain('version: "0.5.1"');
     expect(health).not.toContain("phase: 8");
   });
