@@ -1,4 +1,5 @@
 import { generateText } from "ai";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyTurnstile } from "@/lib/abuse/turnstile";
 import { getRequestIdentity, type RequestIdentity } from "@/lib/auth/identity";
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
   }
 
   const authCookies: AuthCookie[] = [];
-  const respond = (response: Response) => authCookies.length ? applyAuthCookies(response, authCookies) : response;
+  const respond = (response: NextResponse) => authCookies.length ? applyAuthCookies(response, authCookies) : response;
   let identity: RequestIdentity;
   try {
     identity = await ensureIdentityAfterChallenge(request, authCookies);
