@@ -53,6 +53,7 @@ describe("release metadata and operator contract", () => {
   it("keeps unresolved external hardening visible instead of marking it complete", () => {
     expect(security).toContain("[ ] Enable Supabase Auth leaked-password protection");
     expect(security).toContain("[ ] Add GitHub Actions `VERCEL_TOKEN`");
+    expect(security).toContain("[ ] Enable GitHub branch protection/rulesets for `main`");
     expect(security).toContain("[x] Supabase migrations through Phase 9 applied and independently verified");
   });
 });
