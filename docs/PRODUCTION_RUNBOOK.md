@@ -2,11 +2,22 @@
 
 ## Deploy
 
-Validate CI, Supabase migrations/advisors, Stripe test-mode webhook, `/api/readiness`, preview smoke tests, then promote the validated Vercel preview. Production payment enablement is outside Phase 5.
+Production deploys are exact-SHA and fail closed.
+
+1. Confirm `main` and `production-release` point to the same certified commit.
+2. Confirm the GitHub `production` environment contains `VERCEL_TOKEN` with deployment access to the configured Vercel team/project.
+3. Confirm Supabase Phase 6–9 readiness, including Phase 9 schema `20260915032600` with `atomicKeyCap: true`.
+4. Confirm Stripe remains TEST mode unless a separate production-payment decision has been approved.
+5. Push the certified SHA to `production-release` or dispatch `deploy-production` with that exact SHA.
+6. The workflow must rerun preflight, release gate, unit tests, lint, build, Playwright E2E, migration safety, and then deploy one prebuilt Vercel Production artifact.
+7. Verify the deployed `/api/health` returns the exact expected commit SHA and Phase 9 metadata.
+8. Verify `/api/readiness` returns `ready` with no required checks missing.
+
+Do not bypass the workflow with an ad-hoc production deployment merely to clear an integrity check.
 
 ## Rollback
 
-Promote the last known-good Vercel deployment. Do not roll back append-only credit ledger entries. If a schema change is involved, use an explicit forward fix unless a tested reversible migration exists.
+Promote the last known-good Vercel deployment only when its application/database compatibility is understood. Do not roll back append-only credit ledger entries. If a schema change is involved, use an explicit forward fix unless a tested reversible migration exists.
 
 ## Model outage
 
@@ -34,8 +45,19 @@ Confirm project identity before any mutation. Inspect Auth/API/Postgres logs and
 
 ## Secret compromise
 
-Rotate the affected provider secret immediately, update Vercel Preview/Production environments, redeploy, rotate webhook/Turnstile counterparts where relevant, and search logs only by non-sensitive request/event identifiers.
+Rotate the affected provider secret immediately, update Vercel Preview/Production environments, redeploy through the exact-SHA release path, rotate webhook/Turnstile counterparts where relevant, and search logs only by non-sensitive request/event identifiers.
 
 ## Observability
 
-Primary structured event fields: requestId, userIdHash/subjectHash, operationId, route, status, credits, counts, model, attempts, latencyMs. Provider dashboard links should be added here after projects are connected.
+Primary structured event fields: requestId, userIdHash/subjectHash, operationId, route, status, credits, counts, model, attempts, latencyMs.
+
+Operational release evidence includes:
+
+- exact `main` SHA
+- exact `production-release` SHA
+- GitHub CI and deployment-readiness results
+- Vercel deployment ID/URL
+- `/api/health` commit SHA, application version and phase
+- `/api/readiness` required checks
+- Supabase Phase 6–9 status
+
