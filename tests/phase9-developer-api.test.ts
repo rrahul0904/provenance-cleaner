@@ -88,6 +88,11 @@ describe("Phase 9 developer API", () => {
     expect(developerDocs).toContain("`parity`, `natural`, `clarity`, `concise`, or `formal`");
     expect(cli).toContain('new Set(["parity", "natural", "clarity", "concise", "formal"])');
     expect(cli).toContain("!TRANSFORM_MODES.has(mode)");
+    expect(transform).toContain("TRANSFORM_PURPOSES");
+    expect(transform).toContain("TRANSFORM_INTENSITIES");
+    expect(browserTransform).toContain("guest_session_created_for_transform");
+    expect(developerDocs).toContain('"purpose": "work"');
+    expect(developerDocs).toContain('"intensity": "balanced"');
   });
 
   it("makes the deployed Phase 9 database contract a required readiness gate", () => {
