@@ -43,6 +43,7 @@ describe("OAuth production transport", () => {
     expect(packer).toContain("checkSourceManifest()");
     expect(packer).toContain("gitBlobSha(data)");
     expect(packer).toContain("TRANSPORT_PATHS.length");
+    expect(packer).toContain("length: 14");
     expect(packer).toContain("OAuth transport files must never be tracked");
     expect(packer).toContain("actualSha !== sha");
     expect(packer).toContain("writeFileSync(TRANSPORT_PATHS[index]");
