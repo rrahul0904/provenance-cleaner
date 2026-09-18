@@ -272,7 +272,12 @@ export function TransformWorkbench() {
         {online && <TurnstileWidget action="transform" onToken={onChallenge} resetKey={challengeReset} />}
 
         <div className="actions primary-actions">
-          <button className="primary" disabled={busy || text.trim().length < 20 || overLimit || !challengeToken || !online} onClick={transform}>
+          <button
+            className="primary"
+            aria-label={`Edit for ${selectedMode.label.toLowerCase()}`}
+            disabled={busy || text.trim().length < 20 || overLimit || !challengeToken || !online}
+            onClick={transform}
+          >
             {busy ? "Validating edit…" : `Quick edit · ${selectedMode.label.toLowerCase()}`}
           </button>
           <button className="ghost" disabled={busy || undoText === null} onClick={undoAdopt}>Undo last apply</button>
