@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { ScannerWorkbench } from "@/components/scanner-workbench";
 import { FileWorkbench } from "@/components/file-workbench";
+import { ArtifactProvenanceWorkbench } from "@/components/artifact-provenance-workbench";
 import { TransformWorkbench } from "@/components/transform-workbench";
 
-type Mode = "text" | "file" | "rewrite";
+type Mode = "text" | "file" | "rewrite" | "artifact";
 const MODES: { id: Mode; label: string; short: string; description: string; anchor: string }[] = [
   { id: "text", label: "Text inspection", short: "Text", description: "Unicode and hidden-signal inspection", anchor: "scanner" },
   { id: "file", label: "File inspection", short: "Files", description: "Metadata and provenance inspection", anchor: "files" },
   { id: "rewrite", label: "Protected rewrite", short: "Rewrite", description: "Fact-preserving semantic editing", anchor: "editor" },
+  { id: "artifact", label: "Artifact provenance", short: "Artifacts", description: "Canonical hashes and integrity receipts", anchor: "artifacts" },
 ];
 
 export function UnifiedWorkbench() {
@@ -72,6 +74,9 @@ export function UnifiedWorkbench() {
         </div>}
         {mounted.has("rewrite") && <div id="workspace-pane-rewrite" role="tabpanel" aria-labelledby="editor" hidden={mode !== "rewrite"}>
           <TransformWorkbench />
+        </div>}
+        {mounted.has("artifact") && <div id="workspace-pane-artifact" role="tabpanel" aria-labelledby="artifacts" hidden={mode !== "artifact"}>
+          <ArtifactProvenanceWorkbench />
         </div>}
       </div>
     </div>

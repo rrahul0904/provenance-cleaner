@@ -1,0 +1,9 @@
+{
+  "name": "Provenance Cleaner",
+  "short_name": "Provenance",
+  "description": "Local content inspection, safe cleaning, protected editing, and provenance receipts.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f3ee",
+  "theme_color": "#15352e"
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { creditCostForText } from "@/lib/product-contract";
 import type { SanitizeReceipt, TextScanReceipt } from "@/lib/provenance/types";
 import { scanText } from "@/lib/provenance/unicode";
@@ -40,6 +40,7 @@ export function ScannerWorkbench() {
   const [error, setError] = useState<string | null>(null);
   const [billingNote, setBillingNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [online, setOnline] = useState(true);
   const [status, setStatus] = useState<{ state: "idle" | "working" | "complete" | "review"; message: string }>({
     state: "idle",
     message: "Ready when you are.",
@@ -54,6 +55,17 @@ export function ScannerWorkbench() {
     () => receipt ? Object.entries(receipt.summary.byCategory).filter(([, count]) => count > 0) : [],
     [receipt],
   );
+
+  useEffect(() => {
+    const sync = () => setOnline(navigator.onLine);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
 
   function replaceText(next: string, sourceFile: string | null = null) {
     setText(next);
@@ -140,6 +152,11 @@ export function ScannerWorkbench() {
   }
 
   async function cleanConservatively() {
+    if (!online) {
+      setError("Cleaning requires a network connection because billing and authoritative verification stay server-side.");
+      setStatus({ state: "review", message: "Local inspection is still available offline." });
+      return;
+    }
     if (!challengeToken || !canScan) return;
     setBusy(true);
     setError(null);
@@ -212,7 +229,7 @@ export function ScannerWorkbench() {
     <div className="panel editor-panel">
       <div className="panel-heading">
         <div><p className="eyebrow">Free text scanner</p><h2>Inspect before you clean.</h2></div>
-        <span className="pill local-pill">Local inspection · free</span>
+        <span className="pill local-pill">{online ? "Local inspection · free" : "Offline · local inspection ready"}</span>
       </div>
 
       <div className="input-toolbar">
@@ -230,18 +247,19 @@ export function ScannerWorkbench() {
 
       <div className="actions primary-actions">
         <button className="primary" onClick={runScan} disabled={!canScan}>Scan text — free</button>
-        <button className="secondary" onClick={() => void cleanConservatively()} disabled={!canScan || busy || !challengeToken}>
+        <button className="secondary" onClick={() => void cleanConservatively()} disabled={!canScan || busy || !challengeToken || !online}>
           {busy ? "Cleaning…" : `Clean safe findings · ${estimatedCredits} usage unit${estimatedCredits === 1 ? "" : "s"}`}
         </button>
         <button className="ghost" onClick={() => replaceText("")}>Clear</button>
       </div>
 
-      <TurnstileWidget action="account" onToken={onChallenge} resetKey={challengeReset} />
+      {online && <TurnstileWidget action="account" onToken={onChallenge} resetKey={challengeReset} />}
+      {!online && <div className="notice-card" role="status"><strong>Offline mode is active.</strong> Scan and receipt export stay local. Billable cleaning, accounts, payments, and model-backed actions are disabled until connectivity returns.</div>}
       <OperationStatus state={status.state} message={status.message} />
 
       <div className="trust-note">
         <span className="status-dot"/>
-        <div><strong>Scan stays local.</strong><p>A guest is created only when a billable clean actually needs authoritative credit state. Raw text is not intentionally persisted.</p></div>
+        <div><strong>Scan stays local{online ? "." : " — even offline."}</strong><p>Receipt export is generated in your browser. A guest is created only when a billable clean actually needs authoritative credit state. Raw text is not intentionally persisted or cached by the offline shell.</p></div>
       </div>
       {billingNote && <div className="success-card">{billingNote}</div>}
       {error && <div className="error-card" role="alert">{error}</div>}

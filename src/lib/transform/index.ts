@@ -4,6 +4,6 @@ export { prepareProtectedText, restoreProtectedText, extractInvariantValues } fr
 export { TRANSFORM_SYSTEM, transformPrompt } from "./prompt";
 export { validateTransformedDraft } from "./validate";
 export { unavailableTextWatermarkVerifier } from "./watermark";
-export { TRANSFORM_MODES } from "./types";
-export type { PreparedText, ProtectedSpan, TransformChecks, TransformMetrics, TransformMode, TransformReceipt, TransformResult, TransformValidation } from "./types";
+export { TRANSFORM_INTENSITIES, TRANSFORM_MODES, TRANSFORM_PURPOSES } from "./types";
+export type { PreparedText, ProtectedSpan, TransformChecks, TransformIntensity, TransformMetrics, TransformMode, TransformPurpose, TransformReceipt, TransformResult, TransformValidation } from "./types";
 export type { TextWatermarkVerifier, WatermarkVerificationResult } from "./watermark";

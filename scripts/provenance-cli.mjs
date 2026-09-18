@@ -6,12 +6,14 @@ const [command, ...args] = process.argv.slice(2);
 const baseUrl = (process.env.PROVENANCE_API_URL || "http://localhost:3000").replace(/\/$/u, "");
 const apiKey = process.env.PROVENANCE_API_KEY?.trim();
 const TRANSFORM_MODES = new Set(["parity", "natural", "clarity", "concise", "formal"]);
+const TRANSFORM_PURPOSES = new Set(["general", "email", "work", "academic", "social"]);
+const TRANSFORM_INTENSITIES = new Set(["light", "balanced", "strong"]);
 
 function usage(exitCode = 0) {
   console.error(`Usage:
   PROVENANCE_API_KEY=pc_sk_... npm run provenance:cli -- usage
   PROVENANCE_API_KEY=pc_sk_... npm run provenance:cli -- scan <file|-> [none|conservative|aggressive]
-  PROVENANCE_API_KEY=pc_sk_... npm run provenance:cli -- transform <file|-> <parity|natural|clarity|concise|formal> [operation-id]
+  PROVENANCE_API_KEY=pc_sk_... npm run provenance:cli -- transform <file|-> <parity|natural|clarity|concise|formal> [general|email|work|academic|social] [light|balanced|strong] [operation-id]
 
 Optional: PROVENANCE_API_URL=https://your-host.example`);
   process.exit(exitCode);
@@ -61,6 +63,11 @@ if (command === "usage") {
   const text = await readInput(args[0]);
   const mode = args[1];
   if (!mode || !TRANSFORM_MODES.has(mode)) usage(1);
-  const operationId = args[2] || crypto.randomUUID();
-  await request("/api/v1/transform", { method: "POST", body: JSON.stringify({ operationId, text, mode }) });
+  let cursor = 2;
+  let purpose = "general";
+  let intensity = "balanced";
+  if (TRANSFORM_PURPOSES.has(args[cursor])) purpose = args[cursor++];
+  if (TRANSFORM_INTENSITIES.has(args[cursor])) intensity = args[cursor++];
+  const operationId = args[cursor] || crypto.randomUUID();
+  await request("/api/v1/transform", { method: "POST", body: JSON.stringify({ operationId, text, mode, purpose, intensity }) });
 }

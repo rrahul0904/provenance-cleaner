@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { countWords, creditCostForText, MAX_REWRITE_WORDS } from "@/lib/product-contract";
-import type { TransformMode, TransformResult } from "@/lib/transform";
+import type { TransformIntensity, TransformMode, TransformPurpose, TransformResult } from "@/lib/transform";
 import { OperationStatus, SemanticDiffViewer } from "./forensic-evidence";
 import { emitReceipt } from "./receipt-drawer";
 import { TurnstileWidget } from "./turnstile-widget";
@@ -13,6 +13,20 @@ const MODES: Array<{ id: TransformMode; label: string; description: string }> = 
   { id: "clarity", label: "Clarity", description: "Make wording and structure easier to follow." },
   { id: "concise", label: "Concise", description: "Reduce repetition without dropping facts or qualifiers." },
   { id: "formal", label: "Formal", description: "Polish the prose for a professional setting." },
+];
+
+const INTENSITIES: Array<{ id: TransformIntensity; label: string; description: string }> = [
+  { id: "light", label: "Light", description: "Small wording and sentence-level improvements." },
+  { id: "balanced", label: "Balanced", description: "Meaningful edits while keeping the source voice recognizable." },
+  { id: "strong", label: "Strong", description: "Broader sentence and transition rewrites with the same factual guardrails." },
+];
+
+const PURPOSES: Array<{ id: TransformPurpose; label: string }> = [
+  { id: "general", label: "General" },
+  { id: "email", label: "Email" },
+  { id: "work", label: "Work" },
+  { id: "academic", label: "Academic" },
+  { id: "social", label: "Social" },
 ];
 
 function messageFrom(payload: unknown, fallback: string) {
@@ -28,9 +42,11 @@ function messageFrom(payload: unknown, fallback: string) {
 
 function downloadReceipt(result: TransformResult) {
   const safe = {
-    version: "semantic-receipt-export-v1",
+    version: "semantic-receipt-export-v2",
     operationId: result.billing?.operationId ?? null,
     mode: result.mode,
+    intensity: result.intensity,
+    purpose: result.purpose,
     model: result.model,
     attempts: result.attempts,
     metrics: result.metrics,
@@ -51,8 +67,12 @@ function downloadReceipt(result: TransformResult) {
 export function TransformWorkbench() {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<TransformMode>("parity");
+  const [intensity, setIntensity] = useState<TransformIntensity>("balanced");
+  const [purpose, setPurpose] = useState<TransformPurpose>("general");
   const [result, setResult] = useState<TransformResult | null>(null);
+  const [undoText, setUndoText] = useState<string | null>(null);
   const [diffOpen, setDiffOpen] = useState(false);
+  const [online, setOnline] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ state: "idle" | "working" | "complete" | "review"; message: string }>({
@@ -65,9 +85,21 @@ export function TransformWorkbench() {
   const activeRequest = useRef<AbortController | null>(null);
   const onChallenge = useCallback((token: string | null) => setChallengeToken(token), []);
   const selectedMode = useMemo(() => MODES.find((item) => item.id === mode)!, [mode]);
+  const selectedIntensity = useMemo(() => INTENSITIES.find((item) => item.id === intensity)!, [intensity]);
   const words = useMemo(() => countWords(text), [text]);
   const estimatedCredits = useMemo(() => creditCostForText(text), [text]);
   const overLimit = words > MAX_REWRITE_WORDS;
+
+  useEffect(() => {
+    const sync = () => setOnline(navigator.onLine);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
 
   function invalidateResult() {
     revision.current += 1;
@@ -93,18 +125,18 @@ export function TransformWorkbench() {
       findingsReview: Math.max(0, next.metrics.protectedTotal - next.metrics.protectedPreserved),
       verification: "Protected factual spans and deterministic preservation checks passed before the credit debit was committed.",
       details: [
+        { label: "Purpose", value: next.purpose },
+        { label: "Intensity", value: next.intensity },
         { label: "Protected", value: `${next.metrics.protectedPreserved}/${next.metrics.protectedTotal}` },
         { label: "Length retained", value: `${Math.round(next.receipt.retainedPercent)}%` },
         { label: "Wording replaced", value: `${Math.round(next.receipt.wordingReplacedPercent)}%` },
-        { label: "Longest unprotected", value: `${next.receipt.longestUnprotectedSharedWordRun} words` },
         { label: "Facts/entities", value: `${next.receipt.checks.numericDateEntityPreserved}/${next.receipt.checks.numericDateEntityExpected}` },
-        { label: "Quotes/refs", value: `${next.receipt.checks.quoteReferencePreserved}/${next.receipt.checks.quoteReferenceExpected}` },
       ],
     });
   }
 
   async function transform() {
-    if (!challengeToken || overLimit) return;
+    if (!challengeToken || overLimit || !online) return;
 
     const requestRevision = revision.current;
     const controller = new AbortController();
@@ -120,7 +152,7 @@ export function TransformWorkbench() {
       const response = await fetch("/api/transform", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, challengeToken }),
+        body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, intensity, purpose, challengeToken }),
         signal: controller.signal,
       });
       const payload = await response.json();
@@ -132,6 +164,7 @@ export function TransformWorkbench() {
       setDiffOpen(true);
       setStatus({ state: "complete", message: "Edit passed preservation checks." });
       publishResult(next);
+      window.dispatchEvent(new Event("provenance:account-changed"));
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       if (revision.current === requestRevision) {
@@ -146,6 +179,24 @@ export function TransformWorkbench() {
     }
   }
 
+  function adoptResult() {
+    if (!result) return;
+    setUndoText(text);
+    setText(result.text);
+    setResult(null);
+    setDiffOpen(false);
+    setStatus({ state: "complete", message: "Revised text is now the source. Undo is available." });
+  }
+
+  function undoAdopt() {
+    if (undoText === null) return;
+    setText(undoText);
+    setUndoText(null);
+    setResult(null);
+    setDiffOpen(false);
+    setStatus({ state: "complete", message: "Last applied revision was undone." });
+  }
+
   async function copyResult() {
     if (result) await navigator.clipboard.writeText(result.text);
   }
@@ -155,7 +206,7 @@ export function TransformWorkbench() {
       <div>
         <p className="eyebrow">Protected semantic editing</p>
         <h2>Edit the prose. Keep the facts.</h2>
-        <p>This is preservation-first semantic editing with deterministic checks—not a claim of authorship or detector evasion. Parity mode uses the tightest wording and length contract.</p>
+        <p>Run a quick guest edit without signing in, choose purpose and rewrite intensity, then keep or undo the result. Every paid edit still uses authoritative credits and deterministic preservation checks.</p>
       </div>
       <span className="pill ai-pill">~{estimatedCredits} usage unit{estimatedCredits === 1 ? "" : "s"}</span>
     </div>
@@ -180,8 +231,22 @@ export function TransformWorkbench() {
             }}
           >{item.label}</button>)}
         </div>
-
         <p className="mode-description">{selectedMode.description}</p>
+
+        <div className="edit-controls">
+          <label>Purpose
+            <select value={purpose} disabled={busy} onChange={(event) => { invalidateResult(); setPurpose(event.target.value as TransformPurpose); }}>
+              {PURPOSES.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}
+            </select>
+          </label>
+          <label>Rewrite intensity
+            <select value={intensity} disabled={busy} onChange={(event) => { invalidateResult(); setIntensity(event.target.value as TransformIntensity); }}>
+              {INTENSITIES.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <p className="mode-description">{selectedIntensity.description}</p>
+
         <textarea
           value={text}
           maxLength={250_000}
@@ -195,28 +260,35 @@ export function TransformWorkbench() {
         />
 
         {overLimit && <div className="error-card">This edit is {words.toLocaleString()} words. Split it into parts of at most {MAX_REWRITE_WORDS.toLocaleString()} words.</div>}
+        {!online && <div className="notice-card" role="status"><strong>Offline mode.</strong> Local inspection remains available, but model-backed edits are disabled until connectivity returns.</div>}
 
         <div className="editor-readiness">
           <span><strong>{words.toLocaleString()}</strong> words</span>
           <span><strong>~{estimatedCredits}</strong> usage units</span>
           <span><strong>{challengeToken ? "ready" : "required"}</strong> bot verification</span>
-          <span><strong>deterministic</strong> preservation</span>
+          <span><strong>{online ? "online" : "offline"}</strong> network</span>
         </div>
 
-        <TurnstileWidget action="transform" onToken={onChallenge} resetKey={challengeReset} />
+        {online && <TurnstileWidget action="transform" onToken={onChallenge} resetKey={challengeReset} />}
 
         <div className="actions primary-actions">
-          <button className="primary" disabled={busy || text.trim().length < 20 || overLimit || !challengeToken} onClick={transform}>
-            {busy ? "Validating edit…" : `Edit for ${selectedMode.label.toLowerCase()}`}
+          <button
+            className="primary"
+            aria-label={`Edit for ${selectedMode.label.toLowerCase()}`}
+            disabled={busy || text.trim().length < 20 || overLimit || !challengeToken || !online}
+            onClick={transform}
+          >
+            {busy ? "Validating edit…" : `Quick edit · ${selectedMode.label.toLowerCase()}`}
           </button>
-          <button className="ghost" disabled={busy || !text} onClick={() => { invalidateResult(); setText(""); }}>Clear</button>
+          <button className="ghost" disabled={busy || undoText === null} onClick={undoAdopt}>Undo last apply</button>
+          <button className="ghost" disabled={busy || !text} onClick={() => { invalidateResult(); setUndoText(null); setText(""); }}>Clear</button>
         </div>
 
         <OperationStatus state={status.state} message={status.message} />
 
         <div className="trust-note">
           <span className="status-dot"/>
-          <div><strong>Facts are protected before generation.</strong><p>Text stays local until you explicitly run an edit. Raw source and result text are not intentionally persisted or written to operational logs.</p></div>
+          <div><strong>No sign-in required for a guest edit.</strong><p>A verified request can create an anonymous guest session server-side. Raw source and result text are not intentionally persisted, logged, or cached by the offline layer.</p></div>
         </div>
         {error && <div className="error-card" role="alert">{error}<p>The account ledger remains authoritative for any reservation or release state.</p></div>}
       </div>
@@ -232,7 +304,7 @@ export function TransformWorkbench() {
         </div> : <>
           <div className="result-summary-card semantic-result-summary">
             <div><span>Outcome</span><strong>Edit passed preservation checks</strong></div>
-            <p>{result.metrics.protectedPreserved}/{result.metrics.protectedTotal} protected spans preserved · {Math.round(result.receipt.wordingReplacedPercent)}% wording replaced</p>
+            <p>{result.metrics.protectedPreserved}/{result.metrics.protectedTotal} protected spans preserved · {Math.round(result.receipt.wordingReplacedPercent)}% wording replaced · {result.purpose}/{result.intensity}</p>
           </div>
 
           <div className="transform-metrics">
@@ -247,6 +319,7 @@ export function TransformWorkbench() {
               <strong>Revised prose</strong>
               <div className="actions inline-actions">
                 <button className="copy" onClick={copyResult}>Copy</button>
+                <button className="copy" onClick={adoptResult}>Use as source</button>
                 <button className="copy" onClick={() => setDiffOpen((value) => !value)}>{diffOpen ? "Hide semantic diff" : "Inspect semantic diff"}</button>
               </div>
             </div>

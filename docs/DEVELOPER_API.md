@@ -58,11 +58,13 @@ Runs the same protected-span semantic transformation contract as the browser wor
 {
   "operationId": "8e1d8274-f4e9-44bf-98fb-2aa2b8bd2c4a",
   "text": "Text long enough to satisfy the transform contract.",
-  "mode": "natural"
+  "mode": "natural",
+  "purpose": "work",
+  "intensity": "balanced"
 }
 ```
 
-`mode` is one of `parity`, `natural`, `clarity`, `concise`, or `formal`.
+`mode` is one of `parity`, `natural`, `clarity`, `concise`, or `formal`. `purpose` is one of `general`, `email`, `work`, `academic`, or `social`. `intensity` is one of `light`, `balanced`, or `strong`. Purpose and intensity default to `general` and `balanced` for backwards compatibility.
 
 Important guarantees:
 
@@ -86,7 +88,7 @@ export PROVENANCE_API_URL='https://your-host.example'
 
 npm run provenance:cli -- usage
 npm run provenance:cli -- scan ./sample.txt conservative
-npm run provenance:cli -- transform ./sample.txt natural
+npm run provenance:cli -- transform ./sample.txt natural work balanced
 cat ./sample.txt | npm run provenance:cli -- scan - none
 ```
 
@@ -120,3 +122,8 @@ Common status codes:
 ## Database boundary
 
 The private `ops.developer_api_keys` table is RLS-enabled and inaccessible to `anon` and `authenticated`. Management and resolution RPCs are executable only by `service_role`. `developer_phase9_status()` exposes only non-secret readiness evidence.
+
+
+## Chrome safe editor
+
+The repository includes a Manifest V3 extension in `extension/chrome`. It uses the same `/api/v1/transform` contract, supports mode/purpose/intensity, can replace selected text in editable fields, and keeps one in-memory undo record. The extension stores the developer API key and preferences only; selected source text and generated output are not written to extension storage.

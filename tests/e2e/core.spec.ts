@@ -7,15 +7,15 @@ async function open(page: import("@playwright/test").Page) {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
 }
-async function selectMode(page: import("@playwright/test").Page, mode: "Text" | "Files" | "Rewrite") {
+async function selectMode(page: import("@playwright/test").Page, mode: "Text" | "Files" | "Rewrite" | "Artifacts") {
   const tab = page.getByRole("tab", { name: new RegExp(`^${mode}`, "i") });
   await tab.click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 async function mockGuestPromo(page: import("@playwright/test").Page, available = 2) { await page.route("**/api/auth/anonymous", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ userId: "00000000-0000-4000-8000-000000000010", isAnonymous: true, balance: { settled: available, held: 0, available }, guestPromoGranted: true, requestId: "guest-e2e" }) })); }
 
-function mockTransformResult(body: { operationId: string; mode: string }) {
-  return { version: "semantic-transform-v2", text: "The revised statement keeps 2026 unchanged.", mode: body.mode, model: "mock/model", attempts: 1, metrics: { sourceWords: 8, outputWords: 7, lengthRatio: 0.95, retainedPercent: 95, wordingReplacedPercent: 55, protectedTotal: 1, protectedPreserved: 1, longestSharedWordRun: 3, trigramOverlap: 0.4, unprotectedLongestSharedWordRun: 2 }, receipt: { sourceWords: 8, outputWords: 7, retainedPercent: 95, wordingReplacedPercent: 55, longestUnprotectedSharedWordRun: 2, protectedSpanCount: 1, checks: { protectedSpansPreserved: true, numericDateEntityExpected: 1, numericDateEntityPreserved: 1, quoteReferenceExpected: 0, quoteReferencePreserved: 0 }, model: "mock/model", attempts: 1, creditsCharged: 1 }, watermark: { available: false, status: "unavailable", note: "No verifier configured." }, warnings: [], billing: { operationId: body.operationId, reservationId: "00000000-0000-4000-8000-000000000001", creditsCharged: 1, balanceAfter: 4 }, requestId: "e2e-request" };
+function mockTransformResult(body: { operationId: string; mode: string; intensity?: string; purpose?: string }) {
+  return { version: "semantic-transform-v2", text: "The revised statement keeps 2026 unchanged.", mode: body.mode, intensity: body.intensity ?? "balanced", purpose: body.purpose ?? "general", model: "mock/model", attempts: 1, metrics: { sourceWords: 8, outputWords: 7, lengthRatio: 0.95, retainedPercent: 95, wordingReplacedPercent: 55, protectedTotal: 1, protectedPreserved: 1, longestSharedWordRun: 3, trigramOverlap: 0.4, unprotectedLongestSharedWordRun: 2 }, receipt: { sourceWords: 8, outputWords: 7, retainedPercent: 95, wordingReplacedPercent: 55, longestUnprotectedSharedWordRun: 2, protectedSpanCount: 1, checks: { protectedSpansPreserved: true, numericDateEntityExpected: 1, numericDateEntityPreserved: 1, quoteReferenceExpected: 0, quoteReferencePreserved: 0 }, model: "mock/model", attempts: 1, creditsCharged: 1 }, watermark: { available: false, status: "unavailable", note: "No verifier configured." }, warnings: [], billing: { operationId: body.operationId, reservationId: "00000000-0000-4000-8000-000000000001", creditsCharged: 1, balanceAfter: 4 }, requestId: "e2e-request" };
 }
 
 test("free Unicode scan stays local while conservative cleaning is billable", async ({ page }) => {
@@ -30,7 +30,7 @@ test("file metadata cleaning is server-authoritative and provenance blocks destr
 });
 
 test("semantic editor surfaces validated mock output without a real model call", async ({ page }) => {
-  await page.route("**/api/transform", async route => { const body = route.request().postDataJSON(); expect(body.challengeToken).toBe("dev-bypass"); expect(body.mode).toBe("parity"); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) }); });
+  await page.route("**/api/transform", async route => { const body = route.request().postDataJSON(); expect(body.challengeToken).toBe("dev-bypass"); expect(body.mode).toBe("parity"); expect(body.intensity).toBe("balanced"); expect(body.purpose).toBe("general"); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) }); });
   await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical."); await expect(editor.getByTestId("turnstile-bypass")).toBeVisible(); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(editor.getByText("1 unit committed", { exact: true })).toBeVisible(); await expect(editor.getByText(/Text-watermark verifier: unavailable/)).toBeVisible();
 });
 
@@ -59,6 +59,33 @@ test("paid rewrite result survives switching away from and back to the workbench
   await page.waitForTimeout(350);
   await selectMode(page, "Rewrite");
   await expect(page.getByRole("region", { name: "Semantics-preserving editor" }).locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged.");
+});
+
+
+
+test("local scan remains usable offline while server-authoritative actions are disabled", async ({ page }) => {
+  await open(page);
+  const scanner = page.getByRole("region", { name: "Provenance text scanner" });
+  await scanner.getByLabel("Text to scan").fill("Offline\u200B inspection remains local.");
+  await page.context().setOffline(true);
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+  await expect(scanner.getByText(/Offline · local inspection ready/)).toBeVisible();
+  await scanner.getByRole("button", { name: "Scan text" }).click();
+  await expect(scanner.getByText("1 finding")).toBeVisible();
+  await expect(scanner.getByRole("button", { name: /Clean safe findings/ })).toBeDisabled();
+  await expect(scanner.getByRole("button", { name: "Export JSON receipt" })).toBeEnabled();
+});
+
+test("artifact provenance creates and re-verifies a local integrity receipt", async ({ page }) => {
+  await open(page);
+  await selectMode(page, "Artifacts");
+  const artifact = page.getByRole("region", { name: "Artifact provenance workbench" });
+  await expect(artifact.getByRole("heading", { name: "Hash the artifact. Verify the receipt." })).toBeVisible();
+  await artifact.getByRole("button", { name: "Generate local receipt" }).click();
+  await expect(artifact.getByText("Receipt generated")).toBeVisible();
+  await expect(artifact.getByText("Artifact SHA-256", { exact: true })).toBeVisible();
+  await artifact.getByRole("button", { name: "Verify artifact + receipt" }).click();
+  await expect(artifact.getByText("Integrity verified")).toBeVisible();
 });
 
 test("pricing pack buttons invoke one-time checkout directly instead of routing through account", async ({ page }) => {

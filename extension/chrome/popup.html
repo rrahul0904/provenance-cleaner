@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Provenance Cleaner</title>
+  <style>
+    body{font:13px/1.45 system-ui,sans-serif;width:360px;margin:0;padding:16px;background:#f5f3ee;color:#151512}h1{font-size:18px;margin:0 0 4px}p{color:#62645f}label{display:grid;gap:5px;margin:10px 0}input,select,textarea{box-sizing:border-box;width:100%;padding:9px;border:1px solid #c9c9c1;border-radius:9px;background:#fff}textarea{min-height:90px;resize:vertical}button{padding:9px 11px;border:0;border-radius:9px;font-weight:700;cursor:pointer}.primary{background:#15352e;color:#fff}.secondary{background:#e4e9e3}.ghost{background:#fff;border:1px solid #c9c9c1}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.status{margin-top:10px;padding:9px;border-radius:9px;background:#ecece6}.error{background:#f3dedd;color:#742d29}.tiny{font-size:11px;color:#777}.output{margin-top:12px}.output[hidden]{display:none}
+  </style>
+</head>
+<body>
+  <h1>Protected rewrite</h1>
+  <p>Rewrite selected text with the same preservation contract as the web app. Source/result text is never saved by the extension.</p>
+  <label>Developer API key<input id="apiKey" type="password" placeholder="pc_…" autocomplete="off"></label>
+  <label>API base<input id="apiBase" value="https://provenance-cleaner.vercel.app"></label>
+  <div class="row">
+    <label>Goal<select id="mode"><option>parity</option><option>natural</option><option>clarity</option><option>concise</option><option>formal</option></select></label>
+    <label>Intensity<select id="intensity"><option>light</option><option selected>balanced</option><option>strong</option></select></label>
+  </div>
+  <label>Purpose<select id="purpose"><option>general</option><option>email</option><option>work</option><option>academic</option><option>social</option></select></label>
+  <div class="actions">
+    <button id="rewrite" class="primary">Rewrite selection</button>
+    <button id="undo" class="secondary">Undo in page</button>
+    <button id="save" class="ghost">Save settings</button>
+  </div>
+  <div id="status" class="status">Select text in an input, textarea, or editable document.</div>
+  <div id="outputBox" class="output" hidden>
+    <label>Validated result<textarea id="output" readonly></textarea></label>
+    <button id="copy" class="ghost">Copy result</button>
+  </div>
+  <p class="tiny">The API key and preferences are stored in extension settings. Selected text and generated output remain memory-only and are not written to extension storage.</p>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -12,13 +12,15 @@ import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
 import {
   chunkProtectedText,
   prepareProtectedText,
+  TRANSFORM_INTENSITIES,
   TRANSFORM_MODES,
+  TRANSFORM_PURPOSES,
   TRANSFORM_SYSTEM,
   transformPrompt,
   unavailableTextWatermarkVerifier,
   validateTransformedDraft,
 } from "@/lib/transform";
-import type { TransformMode, TransformResult } from "@/lib/transform";
+import type { TransformIntensity, TransformMode, TransformPurpose, TransformResult } from "@/lib/transform";
 
 export const runtime = "nodejs";
 const DEFAULT_MODEL = "mistral/mistral-medium-3.5";
@@ -27,6 +29,8 @@ const bodySchema = z.object({
   operationId: z.string().uuid(),
   text: z.string().trim().min(20).max(250_000),
   mode: z.enum(TRANSFORM_MODES),
+  intensity: z.enum(TRANSFORM_INTENSITIES).default("balanced"),
+  purpose: z.enum(TRANSFORM_PURPOSES).default("general"),
 });
 
 function wordBucket(words: number) {
@@ -36,14 +40,21 @@ function wordBucket(words: number) {
   return "4001-8000";
 }
 
-async function generateAttempt(protectedText: string, mode: TransformMode, model: string, retryFeedback?: string) {
+async function generateAttempt(
+  protectedText: string,
+  mode: TransformMode,
+  intensity: TransformIntensity,
+  purpose: TransformPurpose,
+  model: string,
+  retryFeedback?: string,
+) {
   const outputs: string[] = [];
   for (const chunk of chunkProtectedText(protectedText)) {
     const { text } = await generateText({
       model,
       system: TRANSFORM_SYSTEM,
-      prompt: transformPrompt(chunk, mode, retryFeedback),
-      temperature: 0.3,
+      prompt: transformPrompt(chunk, mode, intensity, purpose, retryFeedback),
+      temperature: intensity === "light" ? 0.2 : intensity === "strong" ? 0.4 : 0.3,
     });
     outputs.push(text.trim());
   }
@@ -94,6 +105,8 @@ export async function POST(request: Request) {
     sourceWordBucket: wordBucket(sourceWords),
     credits: cost,
     mode: parsed.mode,
+    intensity: parsed.intensity,
+    purpose: parsed.purpose,
   });
 
   let reservationId: string;
@@ -111,7 +124,7 @@ export async function POST(request: Request) {
   let retryFeedback: string | undefined;
   try {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      const draft = await generateAttempt(prepared.protectedText, parsed.mode, model, retryFeedback);
+      const draft = await generateAttempt(prepared.protectedText, parsed.mode, parsed.intensity, parsed.purpose, model, retryFeedback);
       const validation = validateTransformedDraft(prepared, draft, parsed.mode);
       if (validation.ok && validation.restoredText) {
         const balance = await commitReservation(identity.userId, reservationId);
@@ -120,6 +133,8 @@ export async function POST(request: Request) {
           version: "semantic-transform-v2",
           text: validation.restoredText,
           mode: parsed.mode,
+          intensity: parsed.intensity,
+          purpose: parsed.purpose,
           model,
           attempts: attempt,
           metrics: validation.metrics,
@@ -139,10 +154,20 @@ export async function POST(request: Request) {
           warnings: validation.warnings,
           billing: { operationId: parsed.operationId, reservationId, creditsCharged: cost, balanceAfter: balance.available },
         };
-        logEvent("developer_transform_success", { requestId: context.requestId, developerKeyHash: subject, operationId: parsed.operationId, model, attempts: attempt, credits: cost, latencyMs: Date.now() - context.startedAt });
+        logEvent("developer_transform_success", {
+          requestId: context.requestId,
+          developerKeyHash: subject,
+          operationId: parsed.operationId,
+          model,
+          attempts: attempt,
+          credits: cost,
+          intensity: parsed.intensity,
+          purpose: parsed.purpose,
+          latencyMs: Date.now() - context.startedAt,
+        });
         return apiOk(context, result as unknown as Record<string, unknown>);
       }
-      retryFeedback = validation.errors.map(item => `- ${item}`).join("\n");
+      retryFeedback = validation.errors.map((item) => `- ${item}`).join("\n");
     }
     await releaseReservation(identity.userId, reservationId, "validation_failed");
     return apiError(context, "validation_failed", "The edit did not pass factual-preservation checks. The credit hold was released.", 422);

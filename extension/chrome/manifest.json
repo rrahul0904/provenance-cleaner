@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Provenance Cleaner Safe Editor",
+  "version": "0.1.0",
+  "description": "Protected in-place editing with purpose, intensity, deterministic preservation, and one-step undo.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://provenance-cleaner.vercel.app/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Provenance Cleaner"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
