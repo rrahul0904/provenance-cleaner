@@ -25,24 +25,6 @@ function gitBlobSha(content) {
     .digest("hex");
 }
 
-function canonicalJson(value) {
-  if (Array.isArray(value)) return value.map(canonicalJson);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, item]) => [key, canonicalJson(item)]),
-    );
-  }
-  return value;
-}
-
-function canonicalJsonSha256(content) {
-  return createHash("sha256")
-    .update(JSON.stringify(canonicalJson(JSON.parse(content))), "utf8")
-    .digest("hex");
-}
-
 function trackedEntries() {
   const output = execFileSync("git", ["ls-files", "-s"], { encoding: "utf8" });
   return output
@@ -103,7 +85,7 @@ for (const path of DIRECT_SOURCE_PATHS) {
   bootstrap.push({
     path,
     blobSha: entry.sha,
-    ...(path === "vercel.json" ? { canonicalJsonSha256: canonicalJsonSha256(data) } : {}),
+    ...(path === "vercel.json" ? { data } : {}),
   });
 }
 
@@ -120,7 +102,7 @@ for (const file of [...sourceFiles].sort((a, b) => b.bytes - a.bytes)) {
 
 bins.forEach((bin, index) => {
   const payload = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     sourceHash: certification.sourceHash,
     bootstrap,
     files: bin.files.map(({ path, blobSha, data }) => ({ path, blobSha, data })),
