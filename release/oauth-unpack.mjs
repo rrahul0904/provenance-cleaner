@@ -37,10 +37,44 @@ function canonicalJson(value) {
   return value;
 }
 
-function canonicalJsonSha256(content) {
-  return createHash("sha256")
-    .update(JSON.stringify(canonicalJson(JSON.parse(content))), "utf8")
-    .digest("hex");
+function sameJson(left, right) {
+  return JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right));
+}
+
+function assertVercelConfigCompatible(actualContent, certifiedContent) {
+  const actual = JSON.parse(actualContent);
+  const certified = JSON.parse(certifiedContent);
+  const allowedTopLevel = new Set(["$schema", "installCommand", "git", "crons", "framework"]);
+
+  for (const key of Object.keys(actual)) {
+    if (!allowedTopLevel.has(key)) {
+      throw new Error(`OAuth transport rejected unexpected Vercel configuration key: ${key}`);
+    }
+  }
+
+  if (actual.installCommand !== certified.installCommand) {
+    throw new Error("OAuth transport Vercel install command integrity failed.");
+  }
+  if (!sameJson(actual.crons ?? [], certified.crons ?? [])) {
+    throw new Error("OAuth transport Vercel cron configuration integrity failed.");
+  }
+
+  if (actual.git !== undefined) {
+    const git = actual.git;
+    if (
+      !git ||
+      typeof git !== "object" ||
+      Array.isArray(git) ||
+      git.deploymentEnabled !== false ||
+      Object.keys(git).some((key) => key !== "deploymentEnabled")
+    ) {
+      throw new Error("OAuth transport Vercel Git configuration integrity failed.");
+    }
+  }
+
+  if (actual.framework !== undefined && actual.framework !== "nextjs") {
+    throw new Error("OAuth transport Vercel framework integrity failed.");
+  }
 }
 
 function sourceFingerprint(entries) {
@@ -69,7 +103,7 @@ if (!/^[0-9a-f]{64}$/u.test(expectedSourceHash)) {
 
 const firstBundle = JSON.parse(readFileSync(bundlePaths[0], "utf8"));
 if (
-  firstBundle?.schemaVersion !== 2 ||
+  firstBundle?.schemaVersion !== 3 ||
   String(firstBundle?.sourceHash ?? "").trim().toLowerCase() !== expectedSourceHash ||
   !Array.isArray(firstBundle.bootstrap)
 ) {
@@ -98,16 +132,21 @@ for (const directPath of DIRECT_SOURCE_PATHS) {
 
   const data = readFileSync(directPath, "utf8");
   if (directPath === "vercel.json") {
-    const expectedCanonical = String(expected.canonicalJsonSha256 ?? "").trim().toLowerCase();
-    const actualCanonical = canonicalJsonSha256(data);
-    if (!/^[0-9a-f]{64}$/u.test(expectedCanonical) || actualCanonical !== expectedCanonical) {
-      throw new Error("OAuth transport canonical Vercel configuration integrity failed.");
+    const certifiedData = typeof expected.data === "string" ? expected.data : "";
+    if (!certifiedData || gitBlobSha(certifiedData) !== expected.blobSha) {
+      throw new Error("OAuth transport certified Vercel configuration blob is invalid.");
     }
+    assertVercelConfigCompatible(data, certifiedData);
+    writeFileSync(directPath, certifiedData, "utf8");
   } else if (gitBlobSha(data) !== expected.blobSha) {
     throw new Error(`OAuth transport bootstrap blob integrity failed: ${directPath}`);
   }
 
-  sourceEntries.push({ path: directPath, blobSha: expected.blobSha });
+  const certifiedBlobSha = gitBlobSha(readFileSync(directPath, "utf8"));
+  if (certifiedBlobSha !== expected.blobSha) {
+    throw new Error(`OAuth transport restored bootstrap blob integrity failed: ${directPath}`);
+  }
+  sourceEntries.push({ path: directPath, blobSha: certifiedBlobSha });
   seenPaths.add(directPath);
 }
 
@@ -115,7 +154,7 @@ for (const bundlePath of bundlePaths) {
   const bundle = JSON.parse(readFileSync(bundlePath, "utf8"));
   const bundleHash = String(bundle?.sourceHash ?? "").trim().toLowerCase();
   if (
-    bundle?.schemaVersion !== 2 ||
+    bundle?.schemaVersion !== 3 ||
     bundleHash !== expectedSourceHash ||
     JSON.stringify(bundle.bootstrap) !== bootstrapJson ||
     !Array.isArray(bundle.files)

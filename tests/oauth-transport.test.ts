@@ -27,15 +27,17 @@ describe("OAuth production transport", () => {
     expect(unpacker).toContain("actualSourceHash !== expectedSourceHash");
   });
 
-  it("certifies byte-exact bootstrap files while allowing semantic-only Vercel JSON normalization", () => {
-    expect(packer).toContain("canonicalJsonSha256");
-    expect(packer).toContain("schemaVersion: 2");
+  it("restores byte-exact certified Vercel config after bounded transport normalization", () => {
+    expect(packer).toContain("schemaVersion: 3");
     expect(packer).toContain("bootstrap");
+    expect(packer).toContain('path === "vercel.json" ? { data }');
     expect(unpacker).toContain('directPath === "vercel.json"');
-    expect(unpacker).toContain("canonicalJsonSha256(data)");
-    expect(unpacker).toContain("OAuth transport canonical Vercel configuration integrity failed");
-    expect(unpacker).toContain("OAuth transport bootstrap blob integrity failed");
-    expect(unpacker).toContain("blobSha: expected.blobSha");
+    expect(unpacker).toContain("assertVercelConfigCompatible(data, certifiedData)");
+    expect(unpacker).toContain("writeFileSync(directPath, certifiedData");
+    expect(unpacker).toContain("OAuth transport rejected unexpected Vercel configuration key");
+    expect(unpacker).toContain("OAuth transport Vercel install command integrity failed");
+    expect(unpacker).toContain("OAuth transport Vercel cron configuration integrity failed");
+    expect(unpacker).toContain("OAuth transport restored bootstrap blob integrity failed");
   });
 
   it("rejects traversal and protects release bootstrap files from bundle overwrite", () => {
