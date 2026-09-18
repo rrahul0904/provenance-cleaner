@@ -6,7 +6,7 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { checkSourceManifest, SOURCE_MANIFEST_PATH } from "./source-manifest.mjs";
 
 const TRANSPORT_PATHS = Array.from(
-  { length: 16 },
+  { length: 14 },
   (_, index) => `release/oauth-bundle-${index + 1}.json`,
 );
 const DIRECT_SOURCE_PATHS = new Set([
