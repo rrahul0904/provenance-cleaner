@@ -1,0 +1,50 @@
+name: prepare-oauth-production-payload
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact certified Git SHA to package
+        required: true
+        type: string
+  push:
+    branches: [production-release]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+      - name: Refuse a different SHA
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Require production-release push to match current main
+        if: github.event_name == 'push'
+        run: |
+          git fetch origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
+      - name: Verify certified source manifest
+        run: npm run release:manifest:check
+      - name: Generate bounded OAuth payload
+        run: npm run release:oauth:pack
+      - name: Publish temporary payload branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B oauth-production-payload
+          git add -f release/oauth-bundle-*.json
+          git commit -m "chore: prepare OAuth payload for ${EXPECTED_SHA}"
+          git push --force origin HEAD:oauth-production-payload

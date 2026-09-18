@@ -18,7 +18,8 @@
     "predeploy": "node scripts/predeploy.mjs",
     "production:verify": "node scripts/verify-production.mjs",
     "predeploy:certify": "npm test && npm run lint && npm run build && npm run release:check && npm run test:e2e && npm run predeploy",
-    "release:manifest:check": "node scripts/source-manifest.mjs --check"
+    "release:manifest:check": "node scripts/source-manifest.mjs --check",
+    "release:oauth:pack": "node scripts/oauth-pack.mjs"
   },
   "dependencies": {
     "@contentauth/c2pa-web": "0.14.3",

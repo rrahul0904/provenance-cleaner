@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { scripts: Record<string, string> };
 const unpacker = readFileSync("release/oauth-unpack.mjs", "utf8");
+const packer = readFileSync("scripts/oauth-pack.mjs", "utf8");
+const payloadWorkflow = readFileSync(".github/workflows/prepare-oauth-production-payload.yml", "utf8");
 
 describe("OAuth production transport", () => {
   it("runs the certified unpacker before every production build", () => {
@@ -34,5 +36,24 @@ describe("OAuth production transport", () => {
 
   it("removes transport parts before Next.js build continues", () => {
     expect(unpacker).toContain("unlinkSync(bundlePath)");
+  });
+
+  it("packs only the certified tracked tree into bounded transport parts", () => {
+    expect(pkg.scripts["release:oauth:pack"]).toBe("node scripts/oauth-pack.mjs");
+    expect(packer).toContain("checkSourceManifest()");
+    expect(packer).toContain("gitBlobSha(data)");
+    expect(packer).toContain("TRANSPORT_PATHS.length");
+    expect(packer).toContain("OAuth transport files must never be tracked");
+    expect(packer).toContain("actualSha !== sha");
+    expect(packer).toContain("writeFileSync(TRANSPORT_PATHS[index]");
+  });
+
+  it("publishes the OAuth payload only from the exact production-release SHA", () => {
+    expect(payloadWorkflow).toContain("production-release");
+    expect(payloadWorkflow).toContain("Refuse a different SHA");
+    expect(payloadWorkflow).toContain("Require production-release push to match current main");
+    expect(payloadWorkflow).toContain("npm run release:manifest:check");
+    expect(payloadWorkflow).toContain("npm run release:oauth:pack");
+    expect(payloadWorkflow).toContain("oauth-production-payload");
   });
 });
