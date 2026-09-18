@@ -1,6 +1,7 @@
 export type ReleaseHealth = {
   status?: string | null;
   commitSha?: string | null;
+  nodeVersion?: string | null;
 };
 
 export type ReleaseReadiness = {
@@ -13,6 +14,7 @@ export type ReleaseIntegrityReport = {
   expectedSha: string | null;
   actualSha: string | null;
   healthStatus: string | null;
+  nodeVersion: string | null;
   readinessStatus: string | null;
   missing: string[];
   issues: string[];
