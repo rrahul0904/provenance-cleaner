@@ -1,6 +1,8 @@
 export type ReleaseHealth = {
   status?: string | null;
   commitSha?: string | null;
+  sourceHash?: string | null;
+  releaseId?: string | null;
   nodeVersion?: string | null;
 };
 
@@ -11,8 +13,12 @@ export type ReleaseReadiness = {
 
 export type ReleaseIntegrityReport = {
   ok: boolean;
+  verificationMode: "commit-sha+source-hash" | "source-hash" | null;
   expectedSha: string | null;
   actualSha: string | null;
+  expectedSourceHash: string | null;
+  actualSourceHash: string | null;
+  releaseId: string | null;
   healthStatus: string | null;
   nodeVersion: string | null;
   readinessStatus: string | null;
@@ -27,8 +33,10 @@ export type DeploymentIntegrityReport = ReleaseIntegrityReport & {
 
 export function normalizeOrigin(value: unknown): string;
 export function normalizeCommitSha(value: unknown): string;
+export function normalizeSourceHash(value: unknown): string;
 export function assessReleaseIntegrity(input: {
   expectedSha: unknown;
+  expectedSourceHash: unknown;
   health?: ReleaseHealth | null;
   readiness?: ReleaseReadiness | null;
 }): ReleaseIntegrityReport;
@@ -39,6 +47,7 @@ export function fetchJson(
 export function verifyDeployment(input: {
   origin: string;
   expectedSha: string;
+  expectedSourceHash: string;
   attempts?: number | string;
   delayMs?: number | string;
   fetchImpl?: typeof fetch;
