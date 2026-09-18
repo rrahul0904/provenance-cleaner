@@ -18,13 +18,24 @@ describe("OAuth production transport", () => {
     expect(unpacker).toContain("using checked-out source tree");
   });
 
-  it("requires the transport source hash to match the certified manifest", () => {
+  it("requires every payload part and reconstructed blob to match the certified source", () => {
     expect(unpacker).toContain("bundleHash !== expectedSourceHash");
     expect(unpacker).toContain("OAuth transport bundle failed certification");
     expect(unpacker).toContain("gitBlobSha(entry.data)");
     expect(unpacker).toContain("actualBlobSha !== declaredBlobSha");
     expect(unpacker).toContain("sourceFingerprint(sourceEntries)");
     expect(unpacker).toContain("actualSourceHash !== expectedSourceHash");
+  });
+
+  it("certifies byte-exact bootstrap files while allowing semantic-only Vercel JSON normalization", () => {
+    expect(packer).toContain("canonicalJsonSha256");
+    expect(packer).toContain("schemaVersion: 2");
+    expect(packer).toContain("bootstrap");
+    expect(unpacker).toContain('directPath === "vercel.json"');
+    expect(unpacker).toContain("canonicalJsonSha256(data)");
+    expect(unpacker).toContain("OAuth transport canonical Vercel configuration integrity failed");
+    expect(unpacker).toContain("OAuth transport bootstrap blob integrity failed");
+    expect(unpacker).toContain("blobSha: expected.blobSha");
   });
 
   it("rejects traversal and protects release bootstrap files from bundle overwrite", () => {
