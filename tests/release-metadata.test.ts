@@ -7,6 +7,11 @@ const lock = JSON.parse(readFileSync("package-lock.json", "utf8")) as {
   packages: Record<string, { version?: string }>;
 };
 const health = readFileSync("src/app/api/health/route.ts", "utf8");
+const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+const readinessWorkflow = readFileSync(".github/workflows/deployment-readiness.yml", "utf8");
+const deployWorkflow = readFileSync(".github/workflows/deploy-production.yml", "utf8");
+const integrityWorkflow = readFileSync(".github/workflows/production-integrity.yml", "utf8");
+const releaseGate = readFileSync("scripts/release-gate.mjs", "utf8");
 const runbook = readFileSync("docs/PRODUCTION_RUNBOOK.md", "utf8");
 const security = readFileSync("docs/SECURITY_CHECKLIST.md", "utf8");
 
@@ -15,6 +20,16 @@ describe("release metadata and operator contract", () => {
     expect(pkg.version).toBe("0.6.0");
     expect(lock.version).toBe(pkg.version);
     expect(lock.packages[""]?.version).toBe(pkg.version);
+  });
+
+  it("pins certification and production tooling to the Vercel Node 24 runtime", () => {
+    expect((pkg as { engines?: { node?: string } }).engines?.node).toBe("24.x");
+    expect(lock.packages[""]?.version).toBe(pkg.version);
+    for (const workflow of [ci, readinessWorkflow, deployWorkflow, integrityWorkflow]) {
+      expect(workflow).toContain("node-version: 24.x");
+      expect(workflow).not.toContain("node-version: 22.22.0");
+    }
+    expect(releaseGate).toContain('add("Node 24.x"');
   });
 
   it("reports Phase 9 health and derives the application version from package metadata", () => {
