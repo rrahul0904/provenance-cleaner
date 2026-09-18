@@ -13,6 +13,8 @@ const browserTransform = readFileSync("src/app/api/transform/route.ts", "utf8");
 const cli = readFileSync("scripts/provenance-cli.mjs", "utf8");
 const developerDocs = readFileSync("docs/DEVELOPER_API.md", "utf8");
 const readiness = readFileSync("src/app/api/readiness/route.ts", "utf8");
+const releaseGate = readFileSync("scripts/release-gate.mjs", "utf8");
+const deploymentDocs = readFileSync("docs/DEPLOYMENT_READY.md", "utf8");
 
 describe("Phase 9 developer API", () => {
   it("generates one-way key material with a stable public prefix", () => {
@@ -100,5 +102,11 @@ describe("Phase 9 developer API", () => {
     expect(readiness).toContain("phase9Schema");
     expect(readiness).toContain("hashedSecretsOnly");
     expect(readiness).toContain("atomicKeyCap");
+    expect(releaseGate).toContain("Phase 9 developer API migration committed");
+    expect(releaseGate).toContain("Phase 9 atomic key cap");
+    expect(releaseGate).toContain("Readiness requires final Phase 9");
+    expect(releaseGate).toContain('REQUIRED_PHASE9_SCHEMA = "20260915032600"');
+    expect(deploymentDocs).toContain("Phase 7, Phase 8, and Phase 9");
+    expect(deploymentDocs).toContain("VERCEL_TOKEN");
   });
 });
