@@ -35,6 +35,8 @@ describe("OAuth production transport", () => {
     expect(unpacker).toContain("assertVercelConfigCompatible(data, certifiedData)");
     expect(unpacker).toContain("writeFileSync(directPath, certifiedData");
     expect(unpacker).toContain("OAuth transport rejected unexpected Vercel configuration key");
+    expect(unpacker).toContain('actual.name !== "provenance-cleaner"');
+    expect(unpacker).toContain("OAuth transport Vercel project name integrity failed");
     expect(unpacker).toContain("OAuth transport Vercel install command integrity failed");
     expect(unpacker).toContain("OAuth transport Vercel cron configuration integrity failed");
     expect(unpacker).toContain("OAuth transport restored bootstrap blob integrity failed");
