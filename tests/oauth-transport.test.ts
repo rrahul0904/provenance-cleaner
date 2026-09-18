@@ -5,9 +5,11 @@ const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { scripts: Recor
 const unpacker = readFileSync("release/oauth-unpack.mjs", "utf8");
 const packer = readFileSync("scripts/oauth-pack.mjs", "utf8");
 const payloadWorkflow = readFileSync(".github/workflows/prepare-oauth-production-payload.yml", "utf8");
+const vercelConfig = JSON.parse(readFileSync("vercel.json", "utf8")) as { installCommand?: string };
 
 describe("OAuth production transport", () => {
-  it("runs the certified unpacker before every production build", () => {
+  it("reconstructs and certifies the OAuth source tree before Vercel installs dependencies", () => {
+    expect(vercelConfig.installCommand).toBe("node release/oauth-unpack.mjs && npm install");
     expect(pkg.scripts.build).toBe("node release/oauth-unpack.mjs && next build");
   });
 
@@ -34,7 +36,7 @@ describe("OAuth production transport", () => {
     expect(unpacker).toContain("seenPaths.has(normalized)");
   });
 
-  it("removes transport parts before Next.js build continues", () => {
+  it("removes transport parts before dependency installation and build continue", () => {
     expect(unpacker).toContain("unlinkSync(bundlePath)");
   });
 
