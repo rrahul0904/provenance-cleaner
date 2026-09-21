@@ -1,23 +1,51 @@
 # Un-Claude Clean-Room Parity Report
 
-This report records implementation evidence for the feature-parity branch. It intentionally documents behavioral parity rather than copying source code, branding, protected copy, or private implementation details.
+Updated: 2026-09-21
 
-## Baseline
+This report records the current resolved state of the clean-room parity work. Historical audit documents remain in the repository as dated evidence of earlier gaps; this file and `docs/UNCLAUDE_FEATURE_PARITY.md` are the current release-facing parity sources.
 
-- Base branch: `controlled-launch-verification`
-- Base head at branch creation: `b8241784dbf9075cb7b2d1c250113de2922ef14c`
-- Parity branch: `full-unclaude-feature-parity`
-- Stripe: TEST MODE ONLY
-- Supabase: `cikxzxxreryycfjumwsd`
-- Vercel project: `provenance-cleaner`
+## Current accounting
+
+- Total known public/behavioral contract rows: **35**
+- VERIFIED: **29**
+- INTENTIONAL_DIVERGENCE: **5**
+- UNVERIFIABLE_PUBLICLY: **1**
+- Known implementation gaps: **0**
 
 ## Intentional divergences
 
-1. **Signed C2PA/provenance integrity** — Provenance Cleaner does not silently strip a cryptographically signed provenance binding and then imply that provenance remains valid. Signed provenance remains inspection-first with explicit integrity consequences.
-2. **Brand/copy/assets** — all Provenance Cleaner branding, design, copy and assets remain original.
-3. **Unsupported detection claims** — no claim of guaranteed detector bypass, undetectability, or verified watermark removal without an actual public verifier.
-4. **Press/vendor claims** — no press logos or vendor status claims are copied without independent evidence.
+1. **Signed C2PA/provenance integrity** — Provenance Cleaner does not silently strip a cryptographically signed provenance binding and then imply that provenance remains valid.
+2. **Language/emoji integrity** — controls such as ZWJ/ZWNJ/BiDi/tag-plane/typographic spaces are detected but preserved for review by default when automatic deletion could alter legitimate text.
+3. **Analytics** — product analytics is disabled rather than enabling tracking solely to mimic another product.
+4. **Brand/vendor evidence** — no copied press logos, vendor claims, trade dress or unsupported third-party status claims.
+5. **Detector-bypass claims** — no guaranteed “undetectable” or verified statistical-watermark-removal claim without a legitimate detector.
 
-## Implementation evidence
+## Publicly unverifiable item
 
-Evidence will be appended here as parity features move from OBSERVED/IMPLEMENTED to VERIFIED.
+The exact current reference contract for a one-year guest browser cookie/session cannot be independently re-probed because the public reference capabilities page is not directly reachable from the verification environment. Provenance Cleaner guest/session behavior itself is implemented and independently tested.
+
+## Current implementation evidence
+
+The former gaps are now represented in source/tests, including:
+
+- TXT routing and shared credit arithmetic;
+- 3.2 MiB file and 8,000-word rewrite boundaries;
+- unified sanitization job orchestration;
+- parity transform mode and factual invariant protection;
+- signed numeric/currency/percentage/entity protection;
+- rewrite receipts/metrics;
+- explicit unavailable text-watermark verifier;
+- lazy guest +2 and signup +3 controls;
+- FIFO purchased-credit refund accounting;
+- controlled deletion reconciliation;
+- US-restricted TEST Checkout;
+- pricing calculator;
+- mailto-only contact;
+- mobile/responsive/keyboard contracts;
+- privacy-safe server sanitation/logging/history.
+
+See `docs/FINAL_REFERENCE_PARITY.md`, `docs/REFERENCE_BEHAVIOR_SPEC.md`, `docs/UNICODE_REFERENCE_AUDIT.md` and `tests/unclaude-parity.test.ts`.
+
+## Release rule
+
+A known parity row may only be `VERIFIED`, `INTENTIONAL_DIVERGENCE`, or `UNVERIFIABLE_PUBLICLY`. The unit suite fails if unresolved legacy status markers are reintroduced into the parity matrix.
