@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CREDIT_PACKS } from "../src/lib/billing/catalog";
 import {
@@ -19,6 +20,14 @@ import {
 } from "../src/lib/transform";
 
 describe("Un-Claude clean-room parity release contract", () => {
+  it("keeps the committed parity matrix free of unresolved launch states", () => {
+    const matrix = readFileSync(new URL("../docs/UNCLAUDE_FEATURE_PARITY.md", import.meta.url), "utf8");
+    for (const unresolved of ["| OBSERVED |", "| PARTIAL |", "| GAP |", "| UNKNOWN |", "| TODO |"]) {
+      expect(matrix).not.toContain(unresolved);
+    }
+    expect(matrix).toContain("Known implementation gaps: **0**");
+  });
+
   it("locks the observed limits, promotions, credit arithmetic and one-time packs", () => {
     expect(MAX_FILE_BYTES).toBe(Math.floor(3.2 * 1024 * 1024));
     expect(validateFileSize(MAX_FILE_BYTES)).toBe(true);
