@@ -49,3 +49,23 @@ test("public responses carry anti-clickjacking and content-sniffing protections"
   expect(response.headers()["x-content-type-options"]).toBe("nosniff");
   expect(response.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
 });
+
+test("scanner renders attacker-controlled HTML as text instead of executable markup", async ({ page }) => {
+  await page.addInitScript(() => { (window as unknown as { __pcXss?: number }).__pcXss = 0; });
+  await page.goto("/");
+  const scanner = page.getByRole("region", { name: "Provenance text scanner" });
+  const payload = '<img src=x onerror="window.__pcXss=1"> unsafe-looking text\u200B';
+  await scanner.getByLabel("Text to scan").fill(payload);
+  await scanner.getByRole("button", { name: "Scan text" }).click();
+  await expect(scanner.getByText(/finding/i).first()).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __pcXss?: number }).__pcXss)).toBe(0);
+  await expect(scanner.locator('img[src="x"]')).toHaveCount(0);
+});
+
+test("public API does not opt into wildcard cross-origin reads", async ({ request }) => {
+  const response = await request.get("/api/health", {
+    headers: { origin: "https://attacker.invalid" },
+  });
+  expect(response.status()).toBe(200);
+  expect(response.headers()["access-control-allow-origin"]).not.toBe("*");
+});
