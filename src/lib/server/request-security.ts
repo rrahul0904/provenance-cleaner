@@ -2,8 +2,19 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 export type CrossSiteMutationReason = "origin_mismatch" | "sec_fetch_site_cross_site";
 
+function isDeveloperBearerRequest(request: Request) {
+  const path = new URL(request.url).pathname;
+  const authorization = request.headers.get("authorization")?.trim() ?? "";
+  return path.startsWith("/api/v1/") && /^Bearer\s+\S+$/iu.test(authorization);
+}
+
 export function crossSiteMutationReason(request: Request): CrossSiteMutationReason | null {
   if (!MUTATING_METHODS.has(request.method.toUpperCase())) return null;
+
+  // Developer APIs authenticate with revocable Bearer keys rather than browser
+  // cookies. Chrome-extension and other approved API clients may legitimately
+  // have a non-site Origin, so let the route's Bearer authentication decide.
+  if (isDeveloperBearerRequest(request)) return null;
 
   const fetchSite = request.headers.get("sec-fetch-site")?.trim().toLowerCase();
   if (fetchSite === "cross-site") return "sec_fetch_site_cross_site";
