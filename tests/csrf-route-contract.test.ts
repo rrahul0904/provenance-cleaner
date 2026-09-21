@@ -38,7 +38,7 @@ describe("cookie-authenticated mutation route CSRF contract", () => {
       const route = relative(API_ROOT, file).replaceAll("\\", "/");
       if (EXEMPT.has(route)) continue;
 
-      if (!source.includes("crossSiteMutationError(request, context)")) missing.push(route);
+      if (!/crossSiteMutationError\\s*\\(\\s*request\\s*,\\s*context\\s*\\)/u.test(source)) missing.push(route);
     }
 
     expect(missing, `mutating routes missing CSRF enforcement: ${missing.join(", ")}`).toEqual([]);
