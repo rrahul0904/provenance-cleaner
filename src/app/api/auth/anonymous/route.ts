@@ -2,7 +2,7 @@ import { z } from "zod";
 import { grantGuestPromoCredits, initializeCreditAccount } from "@/lib/billing/server";
 import { applyAuthCookies, createClient, type AuthCookie } from "@/lib/supabase/server";
 import { verifyTurnstile } from "@/lib/abuse/turnstile";
-import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
+import { ApiRequestError, apiError, apiOk, parseJson, crossSiteMutationError, requestContext, retryAfter } from "@/lib/server/api";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
 import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
 
@@ -11,6 +11,8 @@ const schema = z.object({ challengeToken: z.string().max(2048).optional(), forCl
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/auth/anonymous");
+  const crossSite = crossSiteMutationError(request, context);
+  if (crossSite) return crossSite;
   const authCookies: AuthCookie[] = [];
   const subject = requestSubjectKey(request);
   const limit = consumeRateLimit("guest", subject, configuredLimit("RATE_LIMIT_GUEST_PER_MINUTE", 4), 60_000);
