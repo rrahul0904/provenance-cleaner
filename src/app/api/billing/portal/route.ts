@@ -1,7 +1,7 @@
 import { getRequestIdentity } from "@/lib/auth/identity";
 import { getStripe } from "@/lib/billing/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { apiError, apiOk, requestContext } from "@/lib/server/api";
+import { apiError, apiOk, crossSiteMutationError, requestContext } from "@/lib/server/api";
 import { publicAppOrigin } from "@/lib/server/env";
 
 export const runtime = "nodejs";
@@ -14,6 +14,8 @@ function customerId(value: unknown) {
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/billing/portal");
+  const crossSite = crossSiteMutationError(request, context);
+  if (crossSite) return crossSite;
   try {
     const identity = await getRequestIdentity();
     if (!identity || identity.isAnonymous) return apiError(context, "registered_account_required", "Sign in with a registered account to manage billing.", 401);
