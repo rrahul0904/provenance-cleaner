@@ -30,6 +30,33 @@ describe("launch security boundaries", () => {
     }))).toBeNull();
   });
 
+  it("allows cross-origin developer API calls only when they carry a Bearer credential", () => {
+    expect(crossSiteMutationReason(new Request("https://app.example/api/v1/transform", {
+      method: "POST",
+      headers: {
+        origin: "chrome-extension://abcdefghijklmnop",
+        "sec-fetch-site": "cross-site",
+        authorization: "Bearer pc_live_example",
+      },
+    }))).toBeNull();
+
+    expect(crossSiteMutationReason(new Request("https://app.example/api/v1/transform", {
+      method: "POST",
+      headers: {
+        origin: "https://evil.example",
+        "sec-fetch-site": "cross-site",
+      },
+    }))).toBe("sec_fetch_site_cross_site");
+
+    expect(crossSiteMutationReason(new Request("https://app.example/api/account/delete", {
+      method: "POST",
+      headers: {
+        origin: "https://evil.example",
+        authorization: "Bearer not-relevant-here",
+      },
+    }))).toBe("origin_mismatch");
+  });
+
   it("never applies the CSRF mutation guard to safe methods", () => {
     expect(crossSiteMutationReason(new Request("https://app.example/api/health", {
       method: "GET",
