@@ -1,6 +1,6 @@
 import { emailFingerprint } from "@/lib/auth/email-fingerprint";
 import { claimSignupPromoCredits } from "@/lib/billing/server";
-import { ApiRequestError, apiError, apiOk, parseJson, requestContext } from "@/lib/server/api";
+import { ApiRequestError, apiError, apiOk, parseJson, crossSiteMutationError, requestContext } from "@/lib/server/api";
 import { hashIdentifier, logEvent } from "@/lib/server/observability";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -10,6 +10,8 @@ const schema = z.object({}).strict();
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/auth/claim-signup-promo");
+  const crossSite = crossSiteMutationError(request, context);
+  if (crossSite) return crossSite;
   try {
     await parseJson(request, schema, 1_024);
     const supabase = await createClient();
