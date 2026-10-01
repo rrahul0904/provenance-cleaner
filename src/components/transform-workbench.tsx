@@ -1,5 +1,7 @@
 "use client";
 
+import { StyleBalancePanel } from "@/components/style-balance-panel";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { countWords, creditCostForText, MAX_REWRITE_WORDS } from "@/lib/product-contract";
 import type { TransformIntensity, TransformMode, TransformPurpose, TransformResult } from "@/lib/transform";
@@ -54,6 +56,7 @@ function downloadReceipt(result: TransformResult) {
     watermark: result.watermark,
     warnings: result.warnings,
     billing: result.billing,
+    styleMeter: result.styleMeter,
   };
   const blob = new Blob([JSON.stringify(safe, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -66,6 +69,7 @@ function downloadReceipt(result: TransformResult) {
 
 export function TransformWorkbench() {
   const [text, setText] = useState("");
+  const [writerSample, setWriterSample] = useState("");
   const [mode, setMode] = useState<TransformMode>("parity");
   const [intensity, setIntensity] = useState<TransformIntensity>("balanced");
   const [purpose, setPurpose] = useState<TransformPurpose>("general");
@@ -152,7 +156,7 @@ export function TransformWorkbench() {
       const response = await fetch("/api/transform", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, intensity, purpose, challengeToken }),
+        body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, intensity, purpose, challengeToken, ...(writerSample.trim() ? { writerSample } : {}) }),
         signal: controller.signal,
       });
       const payload = await response.json();
@@ -258,6 +262,8 @@ export function TransformWorkbench() {
             setText(event.target.value);
           }}
         />
+
+        <StyleBalancePanel text={text} comparison={result?.styleMeter} writerSample={writerSample} onWriterSample={(sample) => { invalidateResult(); setWriterSample(sample); }} disabled={busy} />
 
         {overLimit && <div className="error-card">This edit is {words.toLocaleString()} words. Split it into parts of at most {MAX_REWRITE_WORDS.toLocaleString()} words.</div>}
         {!online && <div className="notice-card" role="status"><strong>Offline mode.</strong> Local inspection remains available, but model-backed edits are disabled until connectivity returns.</div>}
