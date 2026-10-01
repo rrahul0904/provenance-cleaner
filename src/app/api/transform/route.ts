@@ -8,7 +8,7 @@ import { commitReservation, grantGuestPromoCredits, initializeCreditAccount, rel
 import { BillingDomainError } from "@/lib/billing/types";
 import { countWords, MAX_REWRITE_WORDS } from "@/lib/product-contract";
 import { planSanitizationJob, SanitizationContractError } from "@/lib/sanitization";
-import { ApiRequestError, apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
+import { ApiRequestError, apiError, apiOk, crossSiteMutationError, parseJson, requestContext, retryAfter } from "@/lib/server/api";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
 import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
 import { applyAuthCookies, createClient, type AuthCookie } from "@/lib/supabase/server";
@@ -113,6 +113,8 @@ async function ensureIdentityAfterChallenge(request: Request, authCookies: AuthC
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/transform");
+  const crossSite = crossSiteMutationError(request, context);
+  if (crossSite) return crossSite;
 
   let parsed: z.infer<typeof transformRequestSchema>;
   try {

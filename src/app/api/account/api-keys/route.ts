@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getRequestIdentity } from "@/lib/auth/identity";
 import { createDeveloperApiKey, listDeveloperApiKeys, revokeDeveloperApiKey } from "@/lib/developer-api";
-import { ApiRequestError, apiError, apiOk, parseJson, requestContext } from "@/lib/server/api";
+import { ApiRequestError, apiError, apiOk, crossSiteMutationError, parseJson, requestContext } from "@/lib/server/api";
 import { consumeRateLimit } from "@/lib/server/rate-limit";
 
 const createSchema = z.object({ name: z.string().trim().min(1).max(80) });
@@ -32,6 +32,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/account/api-keys");
+  const crossSite = crossSiteMutationError(request, context);
+  if (crossSite) return crossSite;
   const resolved = await verifiedIdentity(context);
   if (resolved.error) return resolved.error;
   const limit = consumeRateLimit("developer-key-create", resolved.identity.userId, 5, 60_000);
@@ -50,6 +52,8 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const context = requestContext(request, "/api/account/api-keys");
+  const crossSite = crossSiteMutationError(request, context);
+  if (crossSite) return crossSite;
   const resolved = await verifiedIdentity(context);
   if (resolved.error) return resolved.error;
   const limit = consumeRateLimit("developer-key-revoke", resolved.identity.userId, 10, 60_000);

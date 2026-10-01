@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { crossSiteMutationReason } from "./request-security";
 
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/u;
 
@@ -15,11 +16,17 @@ export function requestContext(request: Request, route: string): RequestContext 
 }
 
 export function apiError(context: RequestContext, code: string, message: string, status: number, headers?: HeadersInit, details?: unknown) {
-  return NextResponse.json({ error: { code, message, requestId: context.requestId, ...(details === undefined ? {} : { details }) } }, { status, headers: { "x-request-id": context.requestId, ...headers } });
+  return NextResponse.json({ error: { code, message, requestId: context.requestId, ...(details === undefined ? {} : { details }) } }, { status, headers: { "cache-control": "no-store", "x-request-id": context.requestId, ...headers } });
 }
 
 export function apiOk<T extends Record<string, unknown>>(context: RequestContext, body: T, status = 200, headers?: HeadersInit) {
-  return NextResponse.json({ ...body, requestId: context.requestId }, { status, headers: { "x-request-id": context.requestId, ...headers } });
+  return NextResponse.json({ ...body, requestId: context.requestId }, { status, headers: { "cache-control": "no-store", "x-request-id": context.requestId, ...headers } });
+}
+
+export function crossSiteMutationError(request: Request, context: RequestContext) {
+  return crossSiteMutationReason(request)
+    ? apiError(context, "cross_site_request_blocked", "Cross-site mutation requests are not allowed.", 403)
+    : null;
 }
 
 export async function parseJson<T>(request: Request, schema: z.ZodType<T>, maxBytes = 32_768): Promise<T> {
