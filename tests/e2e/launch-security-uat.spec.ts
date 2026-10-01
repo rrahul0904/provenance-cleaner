@@ -26,6 +26,16 @@ test("safe cross-site reads remain available while sensitive anonymous API respo
   expect(balance.headers()["cache-control"]).toBe("no-store");
 });
 
+test("Fetch Metadata rejects cross-site mutations even without an Origin", async ({ request }) => {
+  const response = await request.post("/api/auth/anonymous", {
+    headers: { "sec-fetch-site": "cross-site", "content-type": "application/json" },
+    data: {},
+  });
+  expect(response.status()).toBe(403);
+  expect(await response.json()).toMatchObject({ error: { code: "cross_site_request_blocked" } });
+  expect(response.headers()["cache-control"]).toBe("no-store");
+});
+
 test("first-time visitor can complete the free inspection journey and understand next steps", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
