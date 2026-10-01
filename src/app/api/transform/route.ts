@@ -1,4 +1,5 @@
 import { generateText } from "ai";
+import { calibrateWriterStyle, compareStyleBalance, createSyntheticStyleProfile } from "@/lib/style-balance-meter";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyTurnstile } from "@/lib/abuse/turnstile";
@@ -36,6 +37,7 @@ export const transformRequestSchema = z.object({
   mode: z.enum(TRANSFORM_MODES),
   intensity: z.enum(TRANSFORM_INTENSITIES).default("balanced"),
   purpose: z.enum(TRANSFORM_PURPOSES).default("general"),
+  writerSample: z.string().min(1).max(40_000).optional(),
   challengeToken: z.string().max(2048).optional(),
 });
 
@@ -175,6 +177,17 @@ export async function POST(request: Request) {
     purpose: parsed.purpose,
   });
 
+  // Scope calibration to the authenticated owner and this operation. Never persist sample text.
+  const styleContext = { userId: identity.userId, sessionId: parsed.operationId, now: Date.now() };
+  let styleProfile;
+  try {
+    styleProfile = parsed.writerSample !== undefined
+      ? await calibrateWriterStyle(parsed.writerSample, styleContext)
+      : await createSyntheticStyleProfile();
+  } catch {
+    return respond(apiError(context, "invalid_style_calibration", "Writer calibration requires at least 48 words and 4 sentence/line units.", 422));
+  }
+
   let reservationId: string;
   try {
     const reservation = await reserveCredits(identity.userId, transformOperationKey(parsed.operationId), cost);
@@ -199,6 +212,7 @@ export async function POST(request: Request) {
       const draft = await generateAttempt(prepared.protectedText, parsed.mode, parsed.intensity, parsed.purpose, model, retryFeedback);
       const validation = validateTransformedDraft(prepared, draft, parsed.mode);
       if (validation.ok && validation.restoredText) {
+        const styleMeter = await compareStyleBalance(parsed.text, validation.restoredText, styleProfile, styleContext);
         const balance = await commitReservation(identity.userId, reservationId);
         const watermark = await unavailableTextWatermarkVerifier.verify(validation.restoredText);
         logEvent("credit_commit", { requestId: context.requestId, userIdHash: subject, operationId: parsed.operationId, credits: cost });
@@ -234,6 +248,7 @@ export async function POST(request: Request) {
             creditsCharged: cost,
           },
           watermark,
+          styleMeter,
           warnings: validation.warnings,
           billing: { operationId: parsed.operationId, reservationId, creditsCharged: cost, balanceAfter: balance.available },
         };

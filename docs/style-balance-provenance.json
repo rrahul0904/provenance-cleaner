@@ -1,0 +1,30 @@
+{
+  "version": "style-balance-provenance-v1",
+  "capability": "StyleBalanceMeter",
+  "meterVersion": "style-balance-v1",
+  "normalizationVersion": "nfc-lines-v1",
+  "implementation": "Independently authored TypeScript; no donor implementation, prompts, lists, thresholds, calibration values, datasets or branding copied.",
+  "reference": {
+    "id": "synthetic-prose-v1",
+    "version": "1",
+    "path": "src/lib/style-balance-reference.ts",
+    "author": "Provenance Cleaner implementation team",
+    "license": "CC0-1.0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "dedication": "To the extent permitted by law, the authors dedicate these independently authored synthetic reference texts to the public domain under CC0-1.0.",
+    "source": "Four synthetic prose examples authored for this implementation, without external corpus input.",
+    "calibration": "Per-metric minimum, upper middle observation, maximum of reference samples; reference sample SHA-256 hashes are computed with every profile.",
+    "limitation": "Demonstration reference only. No population, quality, language universality or authorship classification claim. English first-person tokens are explicitly limited."
+  },
+  "writerCalibration": {
+    "source": "Caller-provided sample; caller retains rights.",
+    "storage": "Ephemeral request-local object; raw sample is not persisted by this capability.",
+    "isolation": "Authenticated user ID plus operation ID bind server calibration. Local-only UI uses a random session ID. Profiles expire after one hour.",
+    "bands": "Single-sample exact observations; no invented tolerance or borrowed calibration values."
+  },
+  "minimumEvidence": "48 words and 4 sentence/line units, independently chosen engineering guardrails, not a statistical significance claim.",
+  "normalization": "NFC, LF line endings, tabs/spaces/nonbreaking-space runs collapsed, line edges trimmed; original hashes remain distinct.",
+  "measurement": "Unicode letter/number tokens; punctuation or newline sentence units; blank-line paragraphs; markdown headings/lists; documented rates; mean type/token ratio across 24-token blocks.",
+  "receipt": "Original/normalized text, measurements, profile and protected-fact SHA-256 hashes. Integrity verification regenerates the entire result; hashes are not identity signatures.",
+  "tests": "Independently authored synthetic fixtures only."
+}
