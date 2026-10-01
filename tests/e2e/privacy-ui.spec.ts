@@ -87,6 +87,31 @@ test("free scan creates an accessible exportable receipt drawer without persisti
   await expect(dialog.getByRole("button", { name: "Export JSON receipt" })).toBeVisible();
   await expect(dialog.getByText("Technical evidence")).toBeVisible();
   await expect(dialog).not.toContainText(canary);
+  await expect(dialog.getByRole("button", { name: "Close receipt" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Close receipt" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(latestReceipt).toBeFocused();
+});
+
+test("workbench tabs support roving keyboard navigation", async ({ page }) => {
+  await page.goto("/");
+  const scanner = page.getByRole("tab", { name: /^Text/i });
+  const files = page.getByRole("tab", { name: /^Files/i });
+  const artifacts = page.getByRole("tab", { name: /^Artifacts/i });
+  await scanner.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(files).toBeFocused();
+  await expect(files).toHaveAttribute("aria-selected", "true");
+  await expect(files).toHaveAttribute("tabindex", "0");
+  await page.keyboard.press("End");
+  await expect(artifacts).toBeFocused();
+  await expect(artifacts).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Home");
+  await expect(scanner).toBeFocused();
+  await expect(scanner).toHaveAttribute("aria-selected", "true");
 });
 
 test("mobile navigation remains available and keyboard dismissible", async ({ page }) => {
@@ -168,7 +193,7 @@ test("core workbench is keyboard reachable and exposes accessible async regions 
   await expect(rewriteTab).toHaveAttribute("aria-selected", "true");
   const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
   await expect(editor).toBeVisible();
-  await expect(editor.locator('[aria-live="polite"]')).toHaveCount(1);
+  await expect(editor.locator('[aria-live="polite"]')).toHaveCount(2);
 
   await page.keyboard.press("Tab");
   const focused = await page.evaluate(() => document.activeElement?.tagName ?? null);

@@ -21,7 +21,7 @@ function mockTransformResult(body: { operationId: string; mode: string; intensit
 test("free Unicode scan stays local while conservative cleaning is billable", async ({ page }) => {
   await mockGuestPromo(page, 2);
   await page.route("**/api/text/sanitize", async route => { const body = route.request().postDataJSON(); expect(body.text).toBe("Hello\u200B world"); expect(body.kind).toBe("text"); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sanitation: { mode: "conservative", removed: [{ id: "u-5-200b", category: "zero_width", disposition: "safe_remove", index: 5, codePoint: "U+200B", characterName: "ZERO WIDTH SPACE", description: "test" }], preservedForReview: [], output: "Hello world" }, verification: { safeRemovalsBefore: 1, safeRemovalsAfter: 0 }, billing: { operationId: body.operationId, reservationId: "00000000-0000-4000-8000-000000000001", creditsCharged: 1, balanceAfter: 1 }, requestId: "text-clean-e2e" }) }); });
-  await open(page); const scanner = page.getByRole("region", { name: "Provenance text scanner" }); await scanner.getByLabel("Text to scan").fill("Hello\u200B world"); await scanner.getByRole("button", { name: "Scan text" }).click(); await expect(scanner.getByText("1 finding")).toBeVisible(); await scanner.getByRole("button", { name: /Clean safe findings/ }).click(); await expect(scanner.getByText(/1 removed/)).toBeVisible(); await expect(scanner.getByText(/1 credit charged · 1 remaining/)).toBeVisible();
+  await open(page); const scanner = page.getByRole("region", { name: "Provenance text scanner" }); const textInput = scanner.getByLabel("Text to scan"); await textInput.fill(""); await textInput.fill("Hello\u200B world"); await expect(textInput).toHaveValue("Hello\u200B world"); await scanner.getByRole("button", { name: "Scan text" }).click(); await expect(scanner.getByText("1 finding")).toBeVisible(); await scanner.getByRole("button", { name: /Clean safe findings/ }).click(); await expect(scanner.getByText(/1 removed/)).toBeVisible(); await expect(scanner.getByText(/1 credit charged · 1 remaining/)).toBeVisible();
 });
 
 test("file metadata cleaning is server-authoritative and provenance blocks destructive action", async ({ page }) => {
@@ -31,16 +31,32 @@ test("file metadata cleaning is server-authoritative and provenance blocks destr
 
 test("semantic editor surfaces validated mock output without a real model call", async ({ page }) => {
   await page.route("**/api/transform", async route => { const body = route.request().postDataJSON(); expect(body.challengeToken).toBe("dev-bypass"); expect(body.mode).toBe("parity"); expect(body.intensity).toBe("balanced"); expect(body.purpose).toBe("general"); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) }); });
-  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical."); await expect(editor.getByTestId("turnstile-bypass")).toBeVisible(); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(editor.getByText("1 unit committed", { exact: true })).toBeVisible(); await expect(editor.getByText(/Text-watermark verifier: unavailable/)).toBeVisible();
+  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.getByRole("textbox", { name: "Source text for protected semantic editing" }).fill("This statement was written in 2026 and should remain factually identical."); await expect(editor.getByTestId("turnstile-bypass")).toBeVisible(); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(editor.getByText("1 unit committed", { exact: true })).toBeVisible(); await expect(editor.getByText(/Text-watermark verifier: unavailable/)).toBeVisible();
 });
 
 test("semantic editor shows safe production errors", async ({ page }) => {
-  await page.route("**/api/transform", route => route.fulfill({ status: 402, contentType: "application/json", body: JSON.stringify({ error: { code: "insufficient_credits", message: "Not enough credits are available for this edit.", requestId: "e2e" } }) })); await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.locator("textarea").fill("This is a sufficiently long editing request that should trigger the mocked API."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.getByText("Not enough credits are available for this edit.")).toBeVisible();
+  await page.route("**/api/transform", route => route.fulfill({ status: 402, contentType: "application/json", body: JSON.stringify({ error: { code: "insufficient_credits", message: "Not enough credits are available for this edit.", requestId: "e2e" } }) })); await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.getByRole("textbox", { name: "Source text for protected semantic editing" }).fill("This is a sufficiently long editing request that should trigger the mocked API."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.getByText("Not enough credits are available for this edit.")).toBeVisible();
+});
+
+test("style balance provides local, bounded measurements without authorship labels", async ({ page }) => {
+  await open(page);
+  await selectMode(page, "Rewrite");
+  const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
+  await editor.getByRole("textbox", { name: "Source text for protected semantic editing" }).fill(
+    "We opened the workshop windows before arranging tools on the broad table. The shelves held paper, cloth, brushes, and jars of water. I checked each handle while my colleague sorted the supplies. Visitors chose seats near the windows and began sketching the quiet garden outside. We left the center of the room clear so everyone could move comfortably. A caretaker repaired the loose hinge before the afternoon group arrived.",
+  );
+  await editor.getByText("Style balance · local measurements").click();
+  await editor.getByRole("button", { name: "Measure source locally" }).click();
+  const measurements = editor.getByRole("table", { name: /Style measurements · style-balance-v1/ });
+  await expect(measurements).toBeVisible();
+  await expect(measurements.getByRole("cell", { name: "within range" }).first()).toBeVisible();
+  await expect(editor.getByText(/do not determine authorship/i)).toBeVisible();
+  await expect(measurements).not.toContainText(/\b(?:AI|human|detector)\b/i);
 });
 
 test("in-flight transform locks source edits until the verified response completes", async ({ page }) => {
   await page.route("**/api/transform", async route => { const body = route.request().postDataJSON(); await new Promise(resolve => setTimeout(resolve, 300)); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) }).catch(() => undefined); });
-  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); const textarea = editor.locator("textarea"); await textarea.fill("This source sentence was written in 2026 and is long enough for editing."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(textarea).toBeDisabled(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(textarea).toBeEnabled();
+  await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); const textarea = editor.getByRole("textbox", { name: "Source text for protected semantic editing" }); await textarea.fill("This source sentence was written in 2026 and is long enough for editing."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(textarea).toBeDisabled(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(textarea).toBeEnabled();
 });
 
 
@@ -53,7 +69,7 @@ test("paid rewrite result survives switching away from and back to the workbench
   await open(page);
   await selectMode(page, "Rewrite");
   const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
-  await editor.locator("textarea").fill("This statement was written in 2026 and should remain factually identical.");
+  await editor.getByRole("textbox", { name: "Source text for protected semantic editing" }).fill("This statement was written in 2026 and should remain factually identical.");
   await editor.getByRole("button", { name: /Edit for parity/i }).click();
   await selectMode(page, "Text");
   await page.waitForTimeout(350);

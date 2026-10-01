@@ -44,8 +44,20 @@ export function UnifiedWorkbench() {
           aria-selected={mode === item.id}
           aria-controls={`workspace-pane-${item.id}`}
           aria-label={`${item.short} — ${item.description}`}
+          tabIndex={mode === item.id ? 0 : -1}
           className={mode === item.id ? "active" : ""}
           onClick={() => selectMode(item)}
+          onKeyDown={event => {
+            const destination = event.key === "ArrowRight" ? (index + 1) % MODES.length
+              : event.key === "ArrowLeft" ? (index + MODES.length - 1) % MODES.length
+              : event.key === "Home" ? 0
+              : event.key === "End" ? MODES.length - 1
+              : -1;
+            if (destination < 0) return;
+            event.preventDefault();
+            selectMode(MODES[destination]);
+            event.currentTarget.parentElement?.querySelectorAll<HTMLElement>("[role=tab]")[destination]?.focus();
+          }}
         >
           <span className="tab-index">0{index + 1}</span>
           <span className="tab-copy"><strong>{item.short}</strong><small>{item.description}</small></span>

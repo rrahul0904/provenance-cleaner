@@ -41,7 +41,10 @@ test("first-time visitor can complete the free inspection journey and understand
 
   await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
   const scanner = page.getByRole("region", { name: "Provenance text scanner" });
-  await scanner.getByLabel("Text to scan").fill("Launch-ready copy\u200B with an invisible marker.");
+  const textInput = scanner.getByLabel("Text to scan");
+  await textInput.fill("");
+  await textInput.fill("Launch-ready copy\u200B with an invisible marker.");
+  await expect(textInput).toHaveValue("Launch-ready copy\u200B with an invisible marker.");
   await scanner.getByRole("button", { name: "Scan text" }).click();
 
   await expect(scanner.getByText(/1 finding/i)).toBeVisible();

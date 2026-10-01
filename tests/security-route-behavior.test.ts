@@ -10,6 +10,7 @@ const backend = vi.hoisted(() => ({
 }));
 const billing = vi.hoisted(() => ({
   initializeCreditAccount: vi.fn(), grantGuestPromoCredits: vi.fn(),
+  claimSignupPromoCredits: vi.fn(),
   reserveCredits: vi.fn(), commitReservation: vi.fn(), releaseReservation: vi.fn(),
   completeCheckoutPurchase: vi.fn(), expireCheckoutPurchase: vi.fn(),
   grantSubscriptionInvoice: vi.fn(), linkStripeCustomer: vi.fn(),
@@ -30,7 +31,7 @@ const USER = "00000000-0000-4000-8000-000000000222";
 const KEY = `pc_sk_${"a".repeat(43)}`;
 const balance = { settled: 2, held: 0, available: 2 };
 
-async function anonymous(headers: Record<string, string>) {
+async function anonymous(headers: { origin?: string; "content-type": string; "sec-fetch-site"?: string }) {
   const { POST } = await import("../src/app/api/auth/anonymous/route");
   return POST(new Request(`${ORIGIN}/api/auth/anonymous`, { method: "POST", headers, body: "{}" }));
 }
@@ -49,10 +50,12 @@ beforeEach(() => {
   backend.verifyTurnstile.mockResolvedValue({ ok: true });
   backend.rpc.mockResolvedValue({ data: { userId: USER, keyId: "key_test", prefix: KEY.slice(0, 17) }, error: null });
   billing.initializeCreditAccount.mockResolvedValue(balance);
+  billing.claimSignupPromoCredits.mockResolvedValue({ balance, granted: true });
   billing.reserveCredits.mockResolvedValue({ reservationId: "reserve_test", created: true, status: "reserved" });
   billing.commitReservation.mockResolvedValue(balance);
   billing.completeCheckoutPurchase.mockResolvedValue({ duplicate: false, requires_refund: false });
   vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_security_fixture");
+  vi.stubEnv("PROMO_FINGERPRINT_SECRET", "security-route-test-secret-32-characters-minimum");
 });
 afterEach(() => { vi.unstubAllEnvs(); });
 
@@ -75,6 +78,28 @@ describe("cookie mutation security through the actual route", () => {
     expect(backend.createClient).not.toHaveBeenCalled();
   });
 
+  it("recognizes the public origin when a reverse proxy uses an internal application URL", async () => {
+    vi.stubEnv("VERCEL", "1");
+    const { crossSiteMutationReason } = await import("../src/lib/server/request-security");
+    const request = new Request("http://app-internal:3000/api/auth/anonymous", {
+      method: "POST",
+      headers: { origin: "https://app.example", host: "app.example", "x-forwarded-proto": "https", "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(crossSiteMutationReason(request)).toBeNull();
+  });
+
+  it("does not trust caller-supplied forwarded protocol metadata", async () => {
+    vi.stubEnv("VERCEL", "");
+    const { crossSiteMutationReason } = await import("../src/lib/server/request-security");
+    const request = new Request("https://app.example/api/auth/anonymous", {
+      method: "POST",
+      headers: { origin: "http://app.example", host: "app.example", "x-forwarded-proto": "http", "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(crossSiteMutationReason(request)).toBe("origin_mismatch");
+  });
+
   it("allows a legitimate same-origin guest session and preserves no-store", async () => {
     const response = await anonymous({ origin: ORIGIN, "sec-fetch-site": "same-origin", "content-type": "application/json" });
     expect(response.status).toBe(200);
@@ -83,6 +108,29 @@ describe("cookie mutation security through the actual route", () => {
     expect(backend.verifyTurnstile).toHaveBeenCalledWith(undefined, "account");
     expect(backend.signInAnonymously).toHaveBeenCalledOnce();
     expect(billing.initializeCreditAccount).toHaveBeenCalledWith(USER);
+  });
+});
+
+describe("signup credits require a confirmed account email", () => {
+  async function claim() {
+    const { POST } = await import("../src/app/api/auth/claim-signup-promo/route");
+    return POST(new Request(`${ORIGIN}/api/auth/claim-signup-promo`, {
+      method: "POST", headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "content-type": "application/json" }, body: "{}",
+    }));
+  }
+
+  it("rejects an account with an unconfirmed email without granting credits", async () => {
+    backend.getUser.mockResolvedValue({ data: { user: { id: USER, email: "person@example.test", email_confirmed_at: null, is_anonymous: false } }, error: null });
+    await expectError(await claim(), 401, "account_required");
+    expect(billing.claimSignupPromoCredits).not.toHaveBeenCalled();
+  });
+
+  it("grants the existing signup allowance only to a confirmed account", async () => {
+    backend.getUser.mockResolvedValue({ data: { user: { id: USER, email: "person@example.test", email_confirmed_at: "2026-10-01T12:00:00.000Z", is_anonymous: false } }, error: null });
+    const response = await claim();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ granted: true, balance });
+    expect(billing.claimSignupPromoCredits).toHaveBeenCalledOnce();
   });
 });
 
@@ -110,7 +158,12 @@ describe("Bearer and extension API compatibility with real token parsing", () =>
       body: JSON.stringify({ text: source, mode: "natural", operationId: "00000000-0000-4000-8000-000000000123" }),
     }));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ text: "We released the service on 2026-08-31 through https://example.com with 42 users.", billing: { creditsCharged: 1 } });
+    const result = await response.json();
+    expect(result).toMatchObject({
+      text: "We released the service on 2026-08-31 through https://example.com with 42 users.",
+      billing: { creditsCharged: 1 },
+      styleMeter: { profileId: "synthetic-prose-v1", before: { status: "INSUFFICIENT_EVIDENCE" }, receipt: { version: "style-receipt-v1", protectedFactsPreserved: true } },
+    });
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(billing.reserveCredits).toHaveBeenCalledOnce();
     expect(billing.commitReservation).toHaveBeenCalledWith(USER, "reserve_test");

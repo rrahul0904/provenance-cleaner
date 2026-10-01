@@ -79,6 +79,7 @@ export function ReceiptDrawer() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const onReceipt = (event: Event) => {
@@ -100,6 +101,19 @@ export function ReceiptDrawer() {
       if (event.key === "Escape") {
         setOpen(false);
         window.requestAnimationFrame(() => triggerRef.current?.focus());
+        return;
+      }
+      if (event.key !== "Tab" || !drawerRef.current) return;
+      const focusable = drawerRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary");
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && (document.activeElement === first || !drawerRef.current.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawerRef.current.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
       }
     };
     document.addEventListener("keydown", close);
@@ -137,7 +151,7 @@ export function ReceiptDrawer() {
     {open && <div className="receipt-overlay" role="presentation" onMouseDown={(event) => {
       if (event.currentTarget === event.target) closeDrawer();
     }}>
-      <aside className="receipt-drawer" role="dialog" aria-modal="true" aria-labelledby="receipt-drawer-title" aria-describedby="receipt-status-copy">
+      <aside ref={drawerRef} className="receipt-drawer" role="dialog" aria-modal="true" aria-labelledby="receipt-drawer-title" aria-describedby="receipt-status-copy">
         <div className="receipt-drawer-grabber" aria-hidden="true" />
         <div className="receipt-drawer-head">
           <div><p className="eyebrow">Forensic ledger</p><h2 id="receipt-drawer-title">{receipt.title}</h2></div>

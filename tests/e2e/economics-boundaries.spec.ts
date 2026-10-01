@@ -84,7 +84,7 @@ test("rewrite UI enforces 7,999 / 8,000 / 8,001 words and whitespace before any 
   await open(page);
   await selectMode(page, "Rewrite");
   const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
-  const textarea = editor.locator("textarea");
+  const textarea = editor.getByRole("textbox", { name: "Source text for protected semantic editing" });
   const button = editor.getByRole("button", { name: /Edit for parity/i });
 
   for (const words of [MAX_REWRITE_WORDS - 1, MAX_REWRITE_WORDS]) {

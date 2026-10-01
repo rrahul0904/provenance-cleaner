@@ -110,7 +110,7 @@ describe("independent StyleBalanceMeter", () => {
     expect(await verifyStyleReceipt(hashChange, brief, long, p)).toBe(false);
     const measurementChange = structuredClone(result); measurementChange.after.metrics.sentenceWords.value = 1;
     expect(await verifyStyleReceipt(measurementChange, brief, long, p)).toBe(false);
-    const metadataChange = structuredClone(result); metadataChange.profileVersion = "2";
+    const metadataChange = structuredClone(result); Object.assign(metadataChange, { profileVersion: "2" });
     expect(await verifyStyleReceipt(metadataChange, brief, long, p)).toBe(false);
   });
 });

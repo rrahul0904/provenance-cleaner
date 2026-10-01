@@ -23,7 +23,7 @@ const sourceManifest = JSON.parse(readFileSync("release/source-manifest.json", "
 
 describe("release metadata and operator contract", () => {
   it("keeps package and lockfile release versions aligned", () => {
-    expect(pkg.version).toBe("0.6.0");
+    expect(pkg.version).toBe("0.7.0");
     expect(lock.version).toBe(pkg.version);
     expect(lock.packages[""]?.version).toBe(pkg.version);
   });
