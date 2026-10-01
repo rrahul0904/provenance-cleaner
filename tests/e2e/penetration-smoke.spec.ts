@@ -11,10 +11,14 @@ test("auth callback rejects protocol-relative open redirects", async ({ request 
   expect(location).not.toContain("evil.example");
 });
 
-test("JSON mutation endpoints reject content-type confusion", async ({ request }) => {
+test("same-origin JSON mutation endpoints reject content-type confusion", async ({ request, baseURL }) => {
+  // Origin is part of the security boundary: a fixed host can accidentally turn
+  // this into a cross-site test when the server or configured base URL changes.
+  const origin = new URL(baseURL!).origin;
   const response = await request.post("/api/auth/anonymous", {
     headers: {
-      origin: "http://127.0.0.1:3000",
+      origin,
+      "sec-fetch-site": "same-origin",
       "content-type": "text/plain",
     },
     data: "{}",
@@ -23,6 +27,17 @@ test("JSON mutation endpoints reject content-type confusion", async ({ request }
   expect(await response.json()).toMatchObject({
     error: { code: "unsupported_media_type" },
   });
+  expect(response.headers()["cache-control"]).toBe("no-store");
+});
+
+test("cross-site content-type confusion is rejected by CSRF before body parsing", async ({ request }) => {
+  const response = await request.post("/api/auth/anonymous", {
+    headers: { origin: "https://attacker.invalid", "content-type": "text/plain" },
+    data: "{}",
+  });
+  expect(response.status()).toBe(403);
+  expect(await response.json()).toMatchObject({ error: { code: "cross_site_request_blocked" } });
+  expect(response.headers()["cache-control"]).toBe("no-store");
 });
 
 test("destructive account route does not expose a GET handler", async ({ request }) => {
