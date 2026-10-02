@@ -1,3 +1,4 @@
+import type { StyleBalanceComparison } from "../style-balance-meter";
 import type { WatermarkVerificationResult } from "./watermark";
 
 export const TRANSFORM_MODES = ["parity", "natural", "clarity", "concise", "formal"] as const;
@@ -55,4 +56,5 @@ export interface TransformResult {
   watermark: WatermarkVerificationResult;
   warnings: string[];
   billing?: TransformBillingReceipt;
+  styleMeter?: StyleBalanceComparison;
 }

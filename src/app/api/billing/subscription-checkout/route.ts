@@ -4,7 +4,7 @@ import { getRequestIdentity } from "@/lib/auth/identity";
 import { getSubscriptionPlan, type SubscriptionPlanId } from "@/lib/billing/subscriptions";
 import { getStripe } from "@/lib/billing/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { apiError, apiOk, parseJson, requestContext, retryAfter } from "@/lib/server/api";
+import { apiError, apiOk, parseJson, crossSiteMutationError, requestContext, retryAfter } from "@/lib/server/api";
 import { publicAppOrigin } from "@/lib/server/env";
 import { configuredLimit, consumeRateLimit } from "@/lib/server/rate-limit";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
@@ -20,6 +20,8 @@ function customerIdFrom(value: unknown) {
 
 export async function POST(request: Request) {
   const context = requestContext(request, "/api/billing/subscription-checkout");
+  const crossSite = crossSiteMutationError(request, context);
+  if (crossSite) return crossSite;
   try {
     const identity = await getRequestIdentity();
     if (!identity || identity.isAnonymous) return apiError(context, "registered_account_required", "Sign in with a registered account before starting a monthly plan.", 401);

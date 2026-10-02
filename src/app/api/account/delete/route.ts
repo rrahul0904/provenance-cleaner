@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getRequestIdentity } from "@/lib/auth/identity";
 import { cancelAccountDeletion, finalizeAccountDeletion, getLinkedStripeCustomer, getPhase6Status, markAccountSubscriptionsCanceled, prepareAccountDeletion } from "@/lib/billing/server";
 import { getStripe } from "@/lib/billing/stripe";
-import { ApiRequestError, apiError, apiOk, parseJson, requestContext } from "@/lib/server/api";
+import { ApiRequestError, apiError, apiOk, parseJson, crossSiteMutationError, requestContext } from "@/lib/server/api";
 import { logEvent, requestSubjectKey } from "@/lib/server/observability";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -35,6 +35,7 @@ async function cancelLinkedSubscriptions(userId:string){
 
 export async function POST(request:Request){
   const context=requestContext(request,"/api/account/delete");
+  const crossSite=crossSiteMutationError(request,context);if(crossSite)return crossSite;
   let identity:Awaited<ReturnType<typeof getRequestIdentity>>|null=null;
   let prepared=false;
   try{
