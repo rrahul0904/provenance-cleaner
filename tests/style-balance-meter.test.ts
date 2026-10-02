@@ -63,9 +63,10 @@ describe("independent StyleBalanceMeter", () => {
   it("rejects stale, future, unbounded or missing writer calibration", async () => {
     const p = await calibrateWriterStyle(sample, context);
     await expect(measureStyleBalance(sample, p, { ...context, now: p.expiresAt! })).rejects.toThrow("stale");
+    await expect(compareStyleBalance(sample, sample, p, { ...context, now: p.expiresAt! })).rejects.toThrow("stale");
     await expect(measureStyleBalance(sample, p, { ...context, now: 0 })).rejects.toThrow("stale");
     await expect(measureStyleBalance(sample, { ...p, expiresAt: 999_999_999 }, context)).rejects.toThrow("Malformed");
-    await expect(measureStyleBalance(sample, { ...p, sampleHashes: [] }, context)).rejects.toThrow("Malformed");
+    await expect(measureStyleBalance(sample, { ...p, sampleHashes: ["0".repeat(64)] }, context)).rejects.toThrow("Malformed");
     await expect(calibrateWriterStyle(sample, { ...context, userId: "" })).rejects.toThrow("scope");
   });
   it.each([null, {}, { version: "99" }, { bands: {} }])("rejects malformed comparison profiles", async p => {
@@ -112,5 +113,20 @@ describe("independent StyleBalanceMeter", () => {
     expect(await verifyStyleReceipt(measurementChange, brief, long, p)).toBe(false);
     const metadataChange = structuredClone(result); Object.assign(metadataChange, { profileVersion: "2" });
     expect(await verifyStyleReceipt(metadataChange, brief, long, p)).toBe(false);
+  });
+  it("embeds a private, non-raw writer profile that independently verifies after export", async () => {
+    const writerProfile = await calibrateWriterStyle(sample, context);
+    const result = await compareStyleBalance(brief, long, writerProfile, context);
+    const exported = JSON.parse(JSON.stringify(result)) as typeof result;
+    expect(exported.receipt.profile).toEqual(writerProfile);
+    expect(exported.receipt.profile.sampleHashes).toEqual([]);
+    expect(JSON.stringify(exported)).not.toContain(sample);
+    expect(await verifyStyleReceipt(exported, brief, long)).toBe(true);
+    const changedProfile = structuredClone(exported);
+    changedProfile.receipt.profile.bands.sentenceWords.median += 1;
+    expect(await verifyStyleReceipt(changedProfile, brief, long)).toBe(false);
+    const malformedProfile = structuredClone(exported);
+    malformedProfile.receipt.profile.scopeHash = "invalid";
+    expect(await verifyStyleReceipt(malformedProfile, brief, long)).toBe(false);
   });
 });
