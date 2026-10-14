@@ -26,15 +26,19 @@ export function validateTransformedDraft(prepared: PreparedText, protectedDraft:
   let protectedPreserved = 0;
   let numericDateEntityPreserved = 0;
   let quoteReferencePreserved = 0;
-  const numericDateEntityExpected = prepared.spans.filter(span => span.kind === "number" || span.kind === "date" || span.kind === "entity").length;
-  const quoteReferenceExpected = prepared.spans.filter(span => span.kind === "quote" || span.kind === "citation").length;
+  let userLockedSpanPreserved = 0;
+  const hasKind = (span: ProtectedSpan, ...kinds: ProtectedSpan["kind"][]) => (span.kinds ?? [span.kind]).some(kind => kinds.includes(kind));
+  const numericDateEntityExpected = prepared.spans.filter(span => hasKind(span, "number", "date", "entity")).length;
+  const quoteReferenceExpected = prepared.spans.filter(span => hasKind(span, "quote", "citation")).length;
+  const userLockedSpanExpected = prepared.spans.reduce((count, span) => count + (span.lockedSpanCount ?? (span.kind === "locked" ? 1 : 0)), 0);
 
   for (const span of prepared.spans) {
     const count = tokenOccurrenceCount(protectedDraft, span.token);
     if (count === 1) {
       protectedPreserved += 1;
-      if (span.kind === "number" || span.kind === "date" || span.kind === "entity") numericDateEntityPreserved += 1;
-      if (span.kind === "quote" || span.kind === "citation") quoteReferencePreserved += 1;
+      if (hasKind(span, "number", "date", "entity")) numericDateEntityPreserved += 1;
+      if (hasKind(span, "quote", "citation")) quoteReferencePreserved += 1;
+      userLockedSpanPreserved += span.lockedSpanCount ?? (span.kind === "locked" ? 1 : 0);
     } else errors.push(`${span.kind} placeholder ${span.token} occurred ${count} times; expected exactly once.`);
   }
 
@@ -69,6 +73,8 @@ export function validateTransformedDraft(prepared: PreparedText, protectedDraft:
       numericDateEntityPreserved,
       quoteReferenceExpected,
       quoteReferencePreserved,
+      userLockedSpanExpected,
+      userLockedSpanPreserved,
     },
   };
 }

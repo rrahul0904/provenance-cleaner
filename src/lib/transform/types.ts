@@ -7,8 +7,8 @@ export const TRANSFORM_PURPOSES = ["general", "email", "work", "academic", "soci
 export type TransformMode = (typeof TRANSFORM_MODES)[number];
 export type TransformIntensity = (typeof TRANSFORM_INTENSITIES)[number];
 export type TransformPurpose = (typeof TRANSFORM_PURPOSES)[number];
-export type ProtectedKind = "url" | "email" | "date" | "number" | "citation" | "quote" | "code" | "entity";
-export interface ProtectedSpan { id: number; kind: ProtectedKind; token: string; value: string; start: number; end: number; }
+export type ProtectedKind = "url" | "email" | "date" | "number" | "citation" | "quote" | "code" | "entity" | "locked";
+export interface ProtectedSpan { id: number; kind: ProtectedKind; kinds?: ProtectedKind[]; lockedSpanCount?: number; token: string; value: string; start: number; end: number; }
 export interface PreparedText { original: string; protectedText: string; spans: ProtectedSpan[]; }
 export interface TransformChecks {
   protectedSpansPreserved: boolean;
@@ -16,6 +16,8 @@ export interface TransformChecks {
   numericDateEntityPreserved: number;
   quoteReferenceExpected: number;
   quoteReferencePreserved: number;
+  userLockedSpanExpected: number;
+  userLockedSpanPreserved: number;
 }
 export interface TransformMetrics {
   sourceWords: number;

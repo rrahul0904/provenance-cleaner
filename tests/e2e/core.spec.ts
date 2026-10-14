@@ -15,8 +15,11 @@ async function selectMode(page: import("@playwright/test").Page, mode: "Text" | 
 }
 async function mockGuestPromo(page: import("@playwright/test").Page, available = 2) { await page.route("**/api/auth/anonymous", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ userId: "00000000-0000-4000-8000-000000000010", isAnonymous: true, balance: { settled: available, held: 0, available }, guestPromoGranted: true, requestId: "guest-e2e" }) })); }
 
-function mockTransformResult(body: { operationId: string; mode: string; intensity?: string; purpose?: string }) {
-  return { version: "semantic-transform-v2", text: "The revised statement keeps 2026 unchanged.", mode: body.mode, intensity: body.intensity ?? "balanced", purpose: body.purpose ?? "general", model: "mock/model", attempts: 1, metrics: { sourceWords: 8, outputWords: 7, lengthRatio: 0.95, retainedPercent: 95, wordingReplacedPercent: 55, protectedTotal: 1, protectedPreserved: 1, longestSharedWordRun: 3, trigramOverlap: 0.4, unprotectedLongestSharedWordRun: 2 }, receipt: { sourceWords: 8, outputWords: 7, retainedPercent: 95, wordingReplacedPercent: 55, longestUnprotectedSharedWordRun: 2, protectedSpanCount: 1, checks: { protectedSpansPreserved: true, numericDateEntityExpected: 1, numericDateEntityPreserved: 1, quoteReferenceExpected: 0, quoteReferencePreserved: 0 }, model: "mock/model", attempts: 1, creditsCharged: 1 }, watermark: { available: false, status: "unavailable", note: "No verifier configured." }, warnings: [], billing: { operationId: body.operationId, reservationId: "00000000-0000-4000-8000-000000000001", creditsCharged: 1, balanceAfter: 4 }, requestId: "e2e-request" };
+function mockTransformResult(body: { operationId: string; mode: string; intensity?: string; purpose?: string; text?: string; lockedSpans?: Array<{ start: number; end: number }> }) {
+  const lockedRanges = body.lockedSpans ?? [];
+  const lockedText = lockedRanges.map(({ start, end }) => body.text?.slice(start, end) ?? "");
+  const lockedCount = lockedRanges.length;
+  return { version: "semantic-transform-v2", text: `The revised statement keeps 2026 unchanged.${lockedText.length ? ` ${lockedText.join(" ")}` : ""}`, mode: body.mode, intensity: body.intensity ?? "balanced", purpose: body.purpose ?? "general", model: "mock/model", attempts: 1, metrics: { sourceWords: 8, outputWords: 7, lengthRatio: 0.95, retainedPercent: 95, wordingReplacedPercent: 55, protectedTotal: 1 + lockedCount, protectedPreserved: 1 + lockedCount, longestSharedWordRun: 3, trigramOverlap: 0.4, unprotectedLongestSharedWordRun: 2 }, receipt: { sourceWords: 8, outputWords: 7, retainedPercent: 95, wordingReplacedPercent: 55, longestUnprotectedSharedWordRun: 2, protectedSpanCount: 1 + lockedCount, checks: { protectedSpansPreserved: true, numericDateEntityExpected: 1, numericDateEntityPreserved: 1, quoteReferenceExpected: 0, quoteReferencePreserved: 0, userLockedSpanExpected: lockedCount, userLockedSpanPreserved: lockedCount }, model: "mock/model", attempts: 1, creditsCharged: 1 }, watermark: { available: false, status: "unavailable", note: "No verifier configured." }, warnings: [], billing: { operationId: body.operationId, reservationId: "00000000-0000-4000-8000-000000000001", creditsCharged: 1, balanceAfter: 4 }, requestId: "e2e-request" };
 }
 
 test("free Unicode scan stays local while conservative cleaning is billable", async ({ page }) => {
@@ -59,8 +62,46 @@ test("semantic editor surfaces validated mock output without a real model call",
   await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.getByRole("textbox", { name: "Source text for protected semantic editing" }).fill("This statement was written in 2026 and should remain factually identical."); await expect(editor.getByTestId("turnstile-bypass")).toBeVisible(); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.locator(".clean-output pre")).toHaveText("The revised statement keeps 2026 unchanged."); await expect(editor.getByText("1 unit committed", { exact: true })).toBeVisible(); await expect(editor.getByText(/Text-watermark verifier: unavailable/)).toBeVisible();
 });
 
+test("writer-selected passages are locked and included in the verified edit receipt", async ({ page }) => {
+  const source = "The customer code CUSTOM-ALPHA stays exactly as provided while other wording changes.";
+  const start = source.indexOf("CUSTOM-ALPHA");
+  await page.route("**/api/transform", async route => {
+    const body = route.request().postDataJSON();
+    expect(body.lockedSpans).toEqual([{ start, end: start + "CUSTOM-ALPHA".length }]);
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTransformResult(body)) });
+  });
+  await open(page);
+  await selectMode(page, "Rewrite");
+  const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
+  const input = editor.getByRole("textbox", { name: "Source text for protected semantic editing" });
+  await input.fill(source);
+  await input.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(18, 30));
+  await editor.getByRole("button", { name: "Lock selected text" }).click();
+  await expect(editor.getByText("1 passage locked")).toBeVisible();
+  await editor.getByRole("button", { name: /Edit for parity/i }).click();
+  await expect(editor.locator(".clean-output pre")).toContainText("CUSTOM-ALPHA");
+  await expect(editor.getByText("locked 1/1")).toBeVisible();
+  await editor.getByRole("button", { name: "Use as source" }).click();
+  await expect(editor.getByText("1 passage locked")).toHaveCount(0);
+});
+
 test("semantic editor shows safe production errors", async ({ page }) => {
   await page.route("**/api/transform", route => route.fulfill({ status: 402, contentType: "application/json", body: JSON.stringify({ error: { code: "insufficient_credits", message: "Not enough credits are available for this edit.", requestId: "e2e" } }) })); await open(page); await selectMode(page, "Rewrite"); const editor = page.getByRole("region", { name: "Semantics-preserving editor" }); await editor.getByRole("textbox", { name: "Source text for protected semantic editing" }).fill("This is a sufficiently long editing request that should trigger the mocked API."); await editor.getByRole("button", { name: /Edit for parity/i }).click(); await expect(editor.getByText("Not enough credits are available for this edit.")).toBeVisible();
+});
+
+test("failed preservation validation enters NEEDS_REVIEW without applying output", async ({ page }) => {
+  await page.route("**/api/transform", route => route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ error: { code: "validation_failed", message: "The edit did not pass factual-preservation checks. The credit hold was released.", requestId: "e2e" } }) }));
+  await open(page);
+  await selectMode(page, "Rewrite");
+  const editor = page.getByRole("region", { name: "Semantics-preserving editor" });
+  const source = "Keep the source unchanged if the protected details cannot be verified.";
+  const input = editor.getByRole("textbox", { name: "Source text for protected semantic editing" });
+  await input.fill(source);
+  await editor.getByRole("button", { name: /Edit for parity/i }).click();
+  await expect(editor.getByText(/NEEDS_REVIEW/)).toBeVisible();
+  await expect(editor.getByRole("alert")).toContainText("credit hold was released");
+  await expect(input).toHaveValue(source);
+  await expect(editor.getByRole("heading", { name: "Ready when you are" })).toBeVisible();
 });
 
 test("style balance provides local, bounded measurements without authorship labels", async ({ page }) => {
