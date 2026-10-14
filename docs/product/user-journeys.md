@@ -41,6 +41,8 @@ Offline state cannot grant billing, credits, accounts, API access, or model tran
 ## File and transform journeys
 
 - File: `select DOCX/PNG/JPEG/PDF → inspect supported metadata/provenance → explain unsupported sanitation for PDF or signed C2PA → sanitize only eligible inputs → verify output → export receipt`.
-- Transform: `paste/TXT → choose purpose/intensity → reserve → model candidate → validate protected facts and length → show before/after → accept/export or retry → commit only accepted work`.
+- Transform: `paste/TXT → choose purpose/intensity → reserve → model candidate → validate protected facts and length → commit the validated billable operation → show before/after and receipt → accept/export or discard`.
+
+Credits are committed after successful validation and before the candidate is returned to the browser. Choosing whether to copy that already-paid candidate into the editor is a separate user action; discarding it does not reverse the completed operation.
 
 Production browser verification of these complete journeys remains outstanding.

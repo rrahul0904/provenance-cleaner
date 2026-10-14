@@ -89,7 +89,7 @@ The intended layering is partially present: domain and provider modules exist, b
 
 | Capability | Code | Unit | Integration | E2E | Production | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Unicode inspection and local sanitation | Present | Present | N/A/local | Core + offline specs | Not separately exercised end-to-end | PRODUCTIZED |
+| Unicode inspection and local scan | Present; deterministic scan is local, cleaning is a separate server action | Present | N/A/local | Core + offline specs; offline E2E requires cleaning disabled | Not separately exercised end-to-end | PRODUCTIZED (inspection only) |
 | Image/DOCX/PDF metadata and provenance inspection | Present; PDF inspection-only | Present | Route/file tests | Core flow coverage | Not exercised with production upload | IMPLEMENTED_UNVERIFIED |
 | PNG/JPEG/DOCX sanitation | Present; signed C2PA blocks destructive clean | Present | Billing/job route tests | Core flow coverage | Not exercised with production upload | IMPLEMENTED_UNVERIFIED |
 | Text sanitation and receipts | Present | Present | Route/billing tests | Core spec | API/readiness only | IMPLEMENTED_UNVERIFIED |

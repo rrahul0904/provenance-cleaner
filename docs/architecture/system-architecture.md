@@ -37,4 +37,4 @@ The code already has domain/provider modules, while route handlers still coordin
 
 ## Deployment truth
 
-Production reports the exact `main` commit and source manifest hash (receipt in `docs/release/current-state-audit.md`). The Vercel deployment ID, project identity and repeatable deployment route remain unverified because automatic Vercel Git deployment is disabled and the controlled workflow credential is unavailable. Release work must preserve exact-SHA verification and resolve this operational path before claiming reproducible releases.
+At the time of the audit, production reported the then-current `main` commit and its source manifest hash (receipt in `docs/release/current-state-audit.md`). This observation is tied to that SHA and must be rechecked after every merge. The Vercel deployment ID, project identity and repeatable deployment route remain unverified because automatic Vercel Git deployment is disabled and the controlled workflow credential is unavailable. Release work must preserve exact-SHA verification and resolve this operational path before claiming reproducible releases.
