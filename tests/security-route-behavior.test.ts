@@ -159,11 +159,23 @@ describe("Bearer and extension API compatibility with real token parsing", () =>
     }));
     expect(response.status).toBe(200);
     const result = await response.json();
+    const { verifyStyleReceipt } = await import("../src/lib/style-balance-meter");
     expect(result).toMatchObject({
       text: "We released the service on 2026-08-31 through https://example.com with 42 users.",
       billing: { creditsCharged: 1 },
-      styleMeter: { profileId: "synthetic-prose-v1", before: { status: "INSUFFICIENT_EVIDENCE" }, receipt: { version: "style-receipt-v1", protectedFactsPreserved: true } },
+      styleMeter: {
+        profileId: "synthetic-prose-v1",
+        before: { status: "INSUFFICIENT_EVIDENCE" },
+        receipt: {
+          version: "style-receipt-v1",
+          protectedFactsPreserved: true,
+          beforeHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+          afterHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        },
+        receiptHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      },
     });
+    expect(await verifyStyleReceipt(result.styleMeter, source, result.text)).toBe(true);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(billing.reserveCredits).toHaveBeenCalledOnce();
     expect(billing.commitReservation).toHaveBeenCalledWith(USER, "reserve_test");
