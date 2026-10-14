@@ -42,13 +42,14 @@ function reliableMultiEntities(text: string) {
   });
 }
 
-function candidatesFor(text: string): Candidate[] {
+function candidatesFor(text: string, lockedRanges: Array<{ start: number; end: number }>): Candidate[] {
   const candidates: Candidate[] = [];
   for (const { kind, regex } of PATTERNS) candidates.push(...matches(regex, text, kind));
   candidates.push(...reliableMultiEntities(text));
   candidates.push(...matches(CAMEL_ENTITY, text, "entity"));
   candidates.push(...matches(ACRONYM_ENTITY, text, "entity"));
-  return candidates;
+  const locked = lockedRanges.map(({ start, end }) => ({ kind: "locked" as const, start, end, value: text.slice(start, end) }));
+  return [...locked, ...candidates.filter(candidate => !locked.some(span => candidate.start < span.end && span.start < candidate.end))];
 }
 
 function chooseNonOverlapping(candidates: Candidate[]) {
@@ -61,8 +62,16 @@ function chooseNonOverlapping(candidates: Candidate[]) {
   return chosen.sort((a, b) => a.start - b.start);
 }
 
-export function prepareProtectedText(text: string): PreparedText {
-  const selected = chooseNonOverlapping(candidatesFor(text));
+export function prepareProtectedText(text: string, lockedRanges: Array<{ start: number; end: number }> = []): PreparedText {
+  const orderedLocks = [...lockedRanges].sort((a, b) => a.start - b.start);
+  for (let index = 0; index < orderedLocks.length; index += 1) {
+    const span = orderedLocks[index];
+    if (!Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end > text.length || span.end <= span.start) {
+      throw new Error("User-locked spans must select a non-empty range within the source text.");
+    }
+    if (index > 0 && span.start < orderedLocks[index - 1].end) throw new Error("User-locked spans cannot overlap.");
+  }
+  const selected = chooseNonOverlapping(candidatesFor(text, orderedLocks));
   const spans: ProtectedSpan[] = selected.map((item, id) => ({ ...item, id, token: `[[PROTECTED_${String(id).padStart(4, "0")}]]` }));
   let cursor = 0;
   let protectedText = "";

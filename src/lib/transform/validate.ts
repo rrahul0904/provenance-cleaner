@@ -26,8 +26,10 @@ export function validateTransformedDraft(prepared: PreparedText, protectedDraft:
   let protectedPreserved = 0;
   let numericDateEntityPreserved = 0;
   let quoteReferencePreserved = 0;
+  let userLockedSpanPreserved = 0;
   const numericDateEntityExpected = prepared.spans.filter(span => span.kind === "number" || span.kind === "date" || span.kind === "entity").length;
   const quoteReferenceExpected = prepared.spans.filter(span => span.kind === "quote" || span.kind === "citation").length;
+  const userLockedSpanExpected = prepared.spans.filter(span => span.kind === "locked").length;
 
   for (const span of prepared.spans) {
     const count = tokenOccurrenceCount(protectedDraft, span.token);
@@ -35,6 +37,7 @@ export function validateTransformedDraft(prepared: PreparedText, protectedDraft:
       protectedPreserved += 1;
       if (span.kind === "number" || span.kind === "date" || span.kind === "entity") numericDateEntityPreserved += 1;
       if (span.kind === "quote" || span.kind === "citation") quoteReferencePreserved += 1;
+      if (span.kind === "locked") userLockedSpanPreserved += 1;
     } else errors.push(`${span.kind} placeholder ${span.token} occurred ${count} times; expected exactly once.`);
   }
 
@@ -69,6 +72,8 @@ export function validateTransformedDraft(prepared: PreparedText, protectedDraft:
       numericDateEntityPreserved,
       quoteReferenceExpected,
       quoteReferencePreserved,
+      userLockedSpanExpected,
+      userLockedSpanPreserved,
     },
   };
 }

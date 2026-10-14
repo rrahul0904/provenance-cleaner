@@ -73,6 +73,7 @@ export function TransformWorkbench() {
   const [mode, setMode] = useState<TransformMode>("parity");
   const [intensity, setIntensity] = useState<TransformIntensity>("balanced");
   const [purpose, setPurpose] = useState<TransformPurpose>("general");
+  const [lockedSpans, setLockedSpans] = useState<Array<{ start: number; end: number }>>([]);
   const [result, setResult] = useState<TransformResult | null>(null);
   const [undoText, setUndoText] = useState<string | null>(null);
   const [diffOpen, setDiffOpen] = useState(false);
@@ -87,6 +88,7 @@ export function TransformWorkbench() {
   const [challengeReset, setChallengeReset] = useState(0);
   const revision = useRef(0);
   const activeRequest = useRef<AbortController | null>(null);
+  const sourceEditor = useRef<HTMLTextAreaElement>(null);
   const onChallenge = useCallback((token: string | null) => setChallengeToken(token), []);
   const selectedMode = useMemo(() => MODES.find((item) => item.id === mode)!, [mode]);
   const selectedIntensity = useMemo(() => INTENSITIES.find((item) => item.id === intensity)!, [intensity]);
@@ -112,6 +114,30 @@ export function TransformWorkbench() {
     setDiffOpen(false);
     setError(null);
     setStatus({ state: "idle", message: "Ready when you are." });
+  }
+
+  function lockSelectedText() {
+    const editor = sourceEditor.current;
+    if (!editor || editor.selectionStart === editor.selectionEnd) {
+      setError("Select a non-empty passage in the source before locking it.");
+      return;
+    }
+    const next = { start: editor.selectionStart, end: editor.selectionEnd };
+    if (lockedSpans.some(span => next.start < span.end && span.start < next.end)) {
+      setError("That selection overlaps a locked passage. Adjust the selection or clear the existing locks.");
+      return;
+    }
+    if (lockedSpans.length >= 20) {
+      setError("You can lock up to 20 passages in one edit.");
+      return;
+    }
+    invalidateResult();
+    setLockedSpans([...lockedSpans, next].sort((a, b) => a.start - b.start));
+  }
+
+  function clearLockedText() {
+    invalidateResult();
+    setLockedSpans([]);
   }
 
   function publishResult(next: TransformResult) {
@@ -156,11 +182,19 @@ export function TransformWorkbench() {
       const response = await fetch("/api/transform", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, intensity, purpose, challengeToken, ...(writerSample.trim() ? { writerSample } : {}) }),
+        body: JSON.stringify({ operationId: crypto.randomUUID(), text, mode, intensity, purpose, lockedSpans, challengeToken, ...(writerSample.trim() ? { writerSample } : {}) }),
         signal: controller.signal,
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(messageFrom(payload, "The edit could not be completed."));
+      if (!response.ok) {
+        const code = payload && typeof payload === "object" && "error" in payload && payload.error && typeof payload.error === "object" && "code" in payload.error ? payload.error.code : null;
+        if (code === "validation_failed") {
+          setError(messageFrom(payload, "The edit did not pass preservation checks. No result was applied and the credit hold was released."));
+          setStatus({ state: "review", message: "NEEDS_REVIEW · The output failed preservation checks; your source remains unchanged." });
+          return;
+        }
+        throw new Error(messageFrom(payload, "The edit could not be completed."));
+      }
       if (controller.signal.aborted || revision.current !== requestRevision) return;
 
       const next = payload as TransformResult;
@@ -187,6 +221,7 @@ export function TransformWorkbench() {
     if (!result) return;
     setUndoText(text);
     setText(result.text);
+    setLockedSpans([]);
     setResult(null);
     setDiffOpen(false);
     setStatus({ state: "complete", message: "Revised text is now the source. Undo is available." });
@@ -195,6 +230,7 @@ export function TransformWorkbench() {
   function undoAdopt() {
     if (undoText === null) return;
     setText(undoText);
+    setLockedSpans([]);
     setUndoText(null);
     setResult(null);
     setDiffOpen(false);
@@ -252,6 +288,7 @@ export function TransformWorkbench() {
         <p className="mode-description">{selectedIntensity.description}</p>
 
         <textarea
+          ref={sourceEditor}
           value={text}
           maxLength={250_000}
           disabled={busy}
@@ -260,8 +297,15 @@ export function TransformWorkbench() {
           onChange={(event) => {
             invalidateResult();
             setText(event.target.value);
+            setLockedSpans([]);
           }}
         />
+
+        <div className="actions inline-actions">
+          <button className="secondary" type="button" disabled={busy || !text} onClick={lockSelectedText}>Lock selected text</button>
+          {lockedSpans.length > 0 && <><span>{lockedSpans.length} passage{lockedSpans.length === 1 ? "" : "s"} locked</span><button className="ghost" type="button" disabled={busy} onClick={clearLockedText}>Clear locks</button></>}
+        </div>
+        {lockedSpans.length > 0 && <p className="mode-description">Locked passages stay unchanged in the returned edit. Editing the source clears these selections.</p>}
 
         <StyleBalancePanel text={text} comparison={result?.styleMeter} writerSample={writerSample} onWriterSample={(sample) => { invalidateResult(); setWriterSample(sample); }} disabled={busy} />
 
@@ -287,7 +331,7 @@ export function TransformWorkbench() {
             {busy ? "Validating edit…" : `Quick edit · ${selectedMode.label.toLowerCase()}`}
           </button>
           <button className="ghost" disabled={busy || undoText === null} onClick={undoAdopt}>Undo last apply</button>
-          <button className="ghost" disabled={busy || !text} onClick={() => { invalidateResult(); setUndoText(null); setText(""); }}>Clear</button>
+          <button className="ghost" disabled={busy || !text} onClick={() => { invalidateResult(); setUndoText(null); setText(""); setLockedSpans([]); }}>Clear</button>
         </div>
 
         <OperationStatus state={status.state} message={status.message} />
@@ -340,6 +384,7 @@ export function TransformWorkbench() {
             <div className="verification-stats">
               <span>facts/entities {result.receipt.checks.numericDateEntityPreserved}/{result.receipt.checks.numericDateEntityExpected}</span>
               <span>quotes/refs {result.receipt.checks.quoteReferencePreserved}/{result.receipt.checks.quoteReferenceExpected}</span>
+              {result.receipt.checks.userLockedSpanExpected > 0 && <span>locked {result.receipt.checks.userLockedSpanPreserved}/{result.receipt.checks.userLockedSpanExpected}</span>}
               <span>{result.receipt.protectedSpanCount} protected spans</span>
             </div>
             <p>Text-watermark verifier: {result.watermark.available ? result.watermark.status : "unavailable"}. {result.watermark.note}</p>

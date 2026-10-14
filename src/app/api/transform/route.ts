@@ -33,10 +33,11 @@ const PREVIEW_RELEASE_SMOKE_MARKER = "[[PROVENANCE_PREVIEW_RELEASE_SMOKE]]";
 
 export const transformRequestSchema = z.object({
   operationId: z.string().uuid(),
-  text: z.string().trim().min(20).max(250_000),
+  text: z.string().min(20).max(250_000).refine(value => value.trim().length >= 20),
   mode: z.enum(TRANSFORM_MODES),
   intensity: z.enum(TRANSFORM_INTENSITIES).default("balanced"),
   purpose: z.enum(TRANSFORM_PURPOSES).default("general"),
+  lockedSpans: z.array(z.object({ start: z.number().int().nonnegative(), end: z.number().int().positive() })).max(20).default([]),
   writerSample: z.string().min(1).max(40_000).optional(),
   challengeToken: z.string().max(2048).optional(),
 });
@@ -127,6 +128,14 @@ export async function POST(request: Request) {
       : apiError(context, "invalid_request", "Request is invalid.", 400);
   }
 
+  const orderedLockedSpans = [...parsed.lockedSpans].sort((a, b) => a.start - b.start);
+  for (let index = 0; index < orderedLockedSpans.length; index += 1) {
+    const span = orderedLockedSpans[index];
+    if (span.end <= span.start || span.end > parsed.text.length || (index > 0 && span.start < orderedLockedSpans[index - 1].end)) {
+      return apiError(context, "invalid_locked_spans", "Locked text selections must be non-overlapping ranges within the source text.", 400);
+    }
+  }
+
   let job;
   try {
     job = planSanitizationJob({ kind: "text", intent: "rewrite", text: parsed.text });
@@ -203,7 +212,7 @@ export async function POST(request: Request) {
     return respond(apiError(context, "billing_unavailable", "Billing is not available.", 503));
   }
 
-  const prepared = prepareProtectedText(parsed.text);
+  const prepared = prepareProtectedText(parsed.text, parsed.lockedSpans);
   const model = process.env.TRANSFORM_MODEL ?? DEFAULT_MODEL;
   const injectPreviewFailure = process.env.VERCEL_ENV === "preview" && parsed.text.includes(PREVIEW_RELEASE_SMOKE_MARKER);
   let retryFeedback: string | undefined;

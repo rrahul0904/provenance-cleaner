@@ -64,6 +64,28 @@ describe("semantic transformation guardrails", () => {
     expect(result.checks.numericDateEntityPreserved).toBe(result.checks.numericDateEntityExpected);
   });
 
+  it("protects user-locked text and reports its preservation separately", () => {
+    const source = "Keep this internal marker exactly while the public wording changes around it.";
+    const start = source.indexOf("internal marker");
+    const prepared = prepareProtectedText(source, [{ start, end: start + "internal marker".length }]);
+    const locked = prepared.spans.find(span => span.kind === "locked")!;
+    const draft = `Retain ${locked.token} exactly while revising the surrounding public wording today.`;
+    const result = validateTransformedDraft(prepared, draft, "natural");
+
+    expect(locked.value).toBe("internal marker");
+    expect(result.ok).toBe(true);
+    expect(result.restoredText).toContain("internal marker");
+    expect(result.checks.userLockedSpanExpected).toBe(1);
+    expect(result.checks.userLockedSpanPreserved).toBe(1);
+  });
+
+  it("rejects invalid and overlapping user-locked ranges", () => {
+    const source = "First selected passage and second selected passage.";
+    expect(() => prepareProtectedText(source, [{ start: -1, end: 5 }])).toThrow(/non-empty range/i);
+    expect(() => prepareProtectedText(source, [{ start: 0, end: 10 }, { start: 9, end: 15 }])).toThrow(/cannot overlap/i);
+    expect(() => prepareProtectedText(source, [{ start: 0, end: source.length + 1 }])).toThrow(/within the source text/i);
+  });
+
   it("enforces the parity length and unprotected carry-over contract", () => {
     const prepared = prepareProtectedText("Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu.");
     const draft = "Alpha beta gamma delta revised wording changes most remaining terms substantially today.";
