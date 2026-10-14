@@ -1,6 +1,6 @@
 # Product contract
 
-**Status:** Phase 1 baseline, 2026-10-13. This contract describes the current product behavior supported by the repository. A listed implementation is not a claim that its complete production journey has been certified; see [the current-state audit](../release/current-state-audit.md).
+**Status:** Phase 1 baseline, updated for Phase 2 inspection coverage on 2026-10-13. This contract describes the current product behavior supported by the repository. A listed implementation is not a claim that its complete production journey has been certified; see [the current-state audit](../release/current-state-audit.md) and [Phase 2 inspection receipt](../release/phase2-core-inspection.md).
 
 ## Product promise
 
@@ -10,7 +10,7 @@ Provenance Cleaner is a content-integrity workbench for inspecting text and supp
 
 | Capability | Contract |
 | --- | --- |
-| Inspect | Deterministic Unicode/text checks and supported file metadata/provenance inspection should explain findings. Inspection is free and local-first where supported. |
+| Inspect | Deterministic Unicode/text checks and supported file metadata/provenance inspection explain findings. C0/C1 control characters are flagged for review; tabs, line feeds, carriage returns, and next-line whitespace are preserved. Inspection is free and local-first where supported. |
 | Sanitize | Sanitation is a separate, explicit action. Text and supported file sanitation are server-authoritative when credits apply; signed provenance blocks a destructive sanitation operation. |
 | Transform | Semantic editing occurs only after an explicit user action. Light/Balanced/Strong intent and purpose control the request. Protected names, dates, numbers, percentages, quotes, citations and other extracted invariants are checked before acceptance. Model output is untrusted until validation passes. |
 | Verify and receipt | Receipts identify the input/output artifact with hashes and operation metadata. Verification must recompute integrity rather than trust mutable UI state. |

@@ -49,7 +49,7 @@ export function ForensicTextPreview({ text, findings }: { text: string; findings
   }
 
   if (findings.length === 0) {
-    return <div className="success-card">No tracked hidden or unusual Unicode characters found.</div>;
+    return <div className="success-card">No tracked hidden, control, or unusual Unicode characters found.</div>;
   }
 
   return <div className="forensic-explorer" data-testid="forensic-text-explorer">
