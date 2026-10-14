@@ -3,7 +3,8 @@ export type FindingCategory =
   | "bidi_control"
   | "unicode_tag"
   | "unusual_space"
-  | "format_control";
+  | "format_control"
+  | "control_character";
 
 export type FindingDisposition = "safe_remove" | "review";
 

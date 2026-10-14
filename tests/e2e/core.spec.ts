@@ -24,6 +24,19 @@ test("free Unicode scan stays local while conservative cleaning is billable", as
   await open(page); const scanner = page.getByRole("region", { name: "Provenance text scanner" }); const textInput = scanner.getByLabel("Text to scan"); await textInput.fill(""); await textInput.fill("Hello\u200B world"); await expect(textInput).toHaveValue("Hello\u200B world"); await scanner.getByRole("button", { name: "Scan text" }).click(); await expect(scanner.getByText("1 finding")).toBeVisible(); await scanner.getByRole("button", { name: /Clean safe findings/ }).click(); await expect(scanner.getByText(/1 removed/)).toBeVisible(); await expect(scanner.getByText(/1 credit charged · 1 remaining/)).toBeVisible();
 });
 
+test("non-printing controls are review findings and are not silently cleaned", async ({ page }) => {
+  await open(page);
+  const scanner = page.getByRole("region", { name: "Provenance text scanner" });
+  await scanner.getByRole("button", { name: "Try example" }).click();
+  const textInput = scanner.getByLabel("Text to scan");
+  await textInput.fill("alpha\u0090omega");
+  await expect(textInput).toHaveValue("alpha\u0090omega");
+  await scanner.getByRole("button", { name: "Scan text — free" }).click();
+  await expect(scanner.getByRole("heading", { name: "1 finding" })).toBeVisible();
+  await expect(scanner.getByText("0 safe removals · 1 item to review")).toBeVisible();
+  await expect(scanner.getByRole("button", { name: /U\+0090 C1 CONTROL/ })).toBeVisible();
+});
+
 test("file metadata cleaning is server-authoritative and provenance blocks destructive action", async ({ page }) => {
   await mockGuestPromo(page, 2); await page.route("**/api/files/sanitize", async route => { expect(route.request().headers()["x-file-name"]).toContain("metadata.png"); await route.fulfill({ status: 200, body: cleanPng(), headers: { "content-type": "image/png", "x-output-file-name": encodeURIComponent("metadata.clean.png"), "x-credits-charged": "1", "x-balance-after": "1", "x-input-kind": "png", "x-removed-count": "1" } }); });
   await open(page); await selectMode(page, "Files"); const fileRegion = page.getByRole("region", { name: "File metadata scanner" }); const input = fileRegion.locator('input[type="file"]'); await input.setInputFiles({ name: "metadata.png", mimeType: "image/png", buffer: pngWith("tEXt", Buffer.from("Author\0Example")) }); await fileRegion.getByRole("button", { name: "Inspect file" }).click(); await expect(fileRegion.getByText(/metadata finding/)).toBeVisible(); await fileRegion.getByRole("button", { name: /Sanitize privacy metadata/ }).click(); await expect(fileRegion.getByText("Before / after metadata")).toBeVisible(); await expect(fileRegion.getByText(/1 credit charged · 1 remaining/)).toBeVisible(); await input.setInputFiles({ name: "signed.png", mimeType: "image/png", buffer: pngWith("caBX", Buffer.from("provenance")) }); await fileRegion.getByRole("button", { name: "Inspect file" }).click(); await expect(fileRegion.getByRole("button", { name: "Sanitization blocked" })).toBeDisabled();
