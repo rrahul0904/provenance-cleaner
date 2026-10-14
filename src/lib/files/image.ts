@@ -39,15 +39,16 @@ function jpegSegments(bytes: Uint8Array) {
       const length = ((bytes[offset] ?? 0) << 8) | (bytes[offset + 1] ?? 0);
       if (length < 2 || offset + length > bytes.length) throw new Error("Invalid JPEG structure: scan header length is invalid.");
       const headerEnd = offset + length;
-      let hasEndMarker = false;
+      let endMarkerOffset = -1;
       for (let index = headerEnd; index + 1 < bytes.length; index += 1) {
         if (bytes[index] === 0xff && bytes[index + 1] === 0xd9) {
-          hasEndMarker = true;
+          endMarkerOffset = index;
           break;
         }
       }
-      if (!hasEndMarker) throw new Error("Invalid JPEG structure: EOI is missing.");
-      segments.push({ start, end: bytes.length, marker, payload: bytes.subarray(offset + 2, headerEnd) });
+      if (endMarkerOffset < 0) throw new Error("Invalid JPEG structure: EOI is missing.");
+      if (endMarkerOffset + 2 !== bytes.length) throw new Error("Invalid JPEG structure: unexpected data follows EOI.");
+      segments.push({ start, end: endMarkerOffset + 2, marker, payload: bytes.subarray(offset + 2, headerEnd) });
       sawEnd = true;
       break;
     }

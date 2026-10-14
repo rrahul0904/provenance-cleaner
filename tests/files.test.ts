@@ -54,9 +54,15 @@ describe("file provenance engine", () => {
     const truncatedSegment = u8(0xff, 0xd8, 0xff, 0xe1, 0x00, 0x20, 0x45);
     const missingEnd = jpegSegment(0xe1, text("ordinary metadata"));
     const jpegWithoutEnd = concatBytes([u8(0xff, 0xd8), missingEnd]);
+    const scannedJpegWithTrailingData = concatBytes([
+      u8(0xff, 0xd8),
+      jpegSegment(0xda, u8(0x01, 0x01)),
+      u8(0x11, 0xff, 0x00, 0x22, 0xff, 0xd9, 0x00),
+    ]);
 
     expect(() => inspectFile(truncatedSegment, "truncated.jpg")).toThrow(/segment length is invalid/i);
     expect(() => sanitizeFile(jpegWithoutEnd, "incomplete.jpg")).toThrow(/EOI is missing/i);
+    expect(() => inspectFile(scannedJpegWithTrailingData, "trailing.jpg")).toThrow(/unexpected data follows EOI/i);
   });
 
   it("blocks PNG sanitization when caBX provenance is present", () => {
