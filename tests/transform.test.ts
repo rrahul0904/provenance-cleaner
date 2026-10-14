@@ -79,6 +79,24 @@ describe("semantic transformation guardrails", () => {
     expect(result.checks.userLockedSpanPreserved).toBe(1);
   });
 
+  it("keeps an entire automatically protected quote intact when a lock overlaps only part of it", () => {
+    const source = 'Rewrite around "Keep this entire quote exactly as written" for the reader.';
+    const start = source.indexOf("entire quote");
+    const end = start + "entire quote".length;
+    const prepared = prepareProtectedText(source, [{ start, end }]);
+    const merged = prepared.spans.find(span => span.kind === "locked")!;
+    const result = validateTransformedDraft(prepared, `Rewrite around ${merged.token} for a new reader today.`, "natural");
+
+    expect(merged.value).toBe('"Keep this entire quote exactly as written"');
+    expect(merged.kinds).toContain("quote");
+    expect(result.ok).toBe(true);
+    expect(result.restoredText).toContain('"Keep this entire quote exactly as written"');
+    expect(result.checks.quoteReferenceExpected).toBe(1);
+    expect(result.checks.quoteReferencePreserved).toBe(1);
+    expect(result.checks.userLockedSpanExpected).toBe(1);
+    expect(result.checks.userLockedSpanPreserved).toBe(1);
+  });
+
   it("rejects invalid and overlapping user-locked ranges", () => {
     const source = "First selected passage and second selected passage.";
     expect(() => prepareProtectedText(source, [{ start: -1, end: 5 }])).toThrow(/non-empty range/i);

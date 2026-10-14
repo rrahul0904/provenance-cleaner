@@ -7,7 +7,7 @@
 - The source textarea can lock up to 20 non-overlapping selections for one edit.
 - Locks use UTF-16 ranges matching textarea selection offsets. Any source edit clears the ranges so stale offsets cannot protect different text.
 - The server validates every range against the submitted source, rejects overlaps and out-of-bounds ranges before identity, billing, or model work, then replaces selected text with protected placeholders.
-- Locked spans pass through the same exactly-once placeholder validation as detected facts and are restored only after validation succeeds.
+- Locked spans pass through the same exactly-once placeholder validation as detected facts and are restored only after validation succeeds. If a lock overlaps an automatically protected fact or quotation, the full overlapping range is protected as one token while the receipt tracks both kinds of checks.
 - The receipt reports expected and preserved user-locked spans separately from numeric/date/entity and quote/reference checks.
 - A `validation_failed` response enters the visible `NEEDS_REVIEW` state. The source remains unchanged and the server releases the credit hold.
 
@@ -21,7 +21,7 @@
 
 | Check | Result |
 | --- | --- |
-| Vitest | 214 tests across 31 files passed |
+| Vitest | 215 tests across 31 files passed |
 | ESLint | Passed |
 | Next.js production build | Passed |
 | Chromium Playwright | 44 tests passed locally on port 3101 with two workers |

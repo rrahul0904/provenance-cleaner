@@ -2,6 +2,8 @@ import type { PreparedText, ProtectedKind, ProtectedSpan } from "./types";
 
 interface Candidate {
   kind: ProtectedKind;
+  kinds?: ProtectedKind[];
+  lockedSpanCount?: number;
   start: number;
   end: number;
   value: string;
@@ -43,13 +45,38 @@ function reliableMultiEntities(text: string) {
 }
 
 function candidatesFor(text: string, lockedRanges: Array<{ start: number; end: number }>): Candidate[] {
-  const candidates: Candidate[] = [];
-  for (const { kind, regex } of PATTERNS) candidates.push(...matches(regex, text, kind));
-  candidates.push(...reliableMultiEntities(text));
-  candidates.push(...matches(CAMEL_ENTITY, text, "entity"));
-  candidates.push(...matches(ACRONYM_ENTITY, text, "entity"));
-  const locked = lockedRanges.map(({ start, end }) => ({ kind: "locked" as const, start, end, value: text.slice(start, end) }));
-  return [...locked, ...candidates.filter(candidate => !locked.some(span => candidate.start < span.end && span.start < candidate.end))];
+  const automatic: Candidate[] = [];
+  for (const { kind, regex } of PATTERNS) automatic.push(...matches(regex, text, kind));
+  automatic.push(...reliableMultiEntities(text));
+  automatic.push(...matches(CAMEL_ENTITY, text, "entity"));
+  automatic.push(...matches(ACRONYM_ENTITY, text, "entity"));
+
+  const candidates = [
+    ...chooseNonOverlapping(automatic),
+    ...lockedRanges.map(({ start, end }) => ({ kind: "locked" as const, kinds: ["locked"] as ProtectedKind[], lockedSpanCount: 1, start, end, value: text.slice(start, end) })),
+  ].sort((a, b) => a.start - b.start || a.end - b.end);
+  const groups: Candidate[][] = [];
+  for (const candidate of candidates) {
+    const group = groups.at(-1);
+    const groupEnd = group?.reduce((end, item) => Math.max(end, item.end), 0) ?? -1;
+    if (group && candidate.start < groupEnd) group.push(candidate);
+    else groups.push([candidate]);
+  }
+
+  return groups.map(group => {
+    if (!group.some(item => item.kind === "locked")) return group[0];
+    const start = Math.min(...group.map(item => item.start));
+    const end = Math.max(...group.map(item => item.end));
+    const kinds = [...new Set(group.flatMap(item => item.kinds ?? [item.kind]))];
+    return {
+      kind: "locked" as const,
+      kinds,
+      lockedSpanCount: group.reduce((count, item) => count + (item.lockedSpanCount ?? 0), 0),
+      start,
+      end,
+      value: text.slice(start, end),
+    };
+  });
 }
 
 function chooseNonOverlapping(candidates: Candidate[]) {
@@ -71,7 +98,7 @@ export function prepareProtectedText(text: string, lockedRanges: Array<{ start: 
     }
     if (index > 0 && span.start < orderedLocks[index - 1].end) throw new Error("User-locked spans cannot overlap.");
   }
-  const selected = chooseNonOverlapping(candidatesFor(text, orderedLocks));
+  const selected = candidatesFor(text, orderedLocks);
   const spans: ProtectedSpan[] = selected.map((item, id) => ({ ...item, id, token: `[[PROTECTED_${String(id).padStart(4, "0")}]]` }));
   let cursor = 0;
   let protectedText = "";
