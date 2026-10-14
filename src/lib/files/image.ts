@@ -21,32 +21,48 @@ function jpegSegments(bytes: Uint8Array) {
   const segments: Array<{ start: number; end: number; marker: number; payload: Uint8Array }> = [];
   if (bytes[0] !== 0xff || bytes[1] !== 0xd8) throw new Error("Invalid JPEG signature");
   let offset = 2;
-  while (offset + 1 < bytes.length) {
-    if (bytes[offset] !== 0xff) break;
+  let sawEnd = false;
+  while (offset < bytes.length) {
+    if (bytes[offset] !== 0xff) throw new Error("Invalid JPEG structure: expected a marker.");
     const start = offset;
     while (bytes[offset] === 0xff) offset += 1;
+    if (offset >= bytes.length) throw new Error("Invalid JPEG structure: marker is truncated.");
     const marker = bytes[offset++];
     if (marker === 0xd9) {
       segments.push({ start, end: offset, marker, payload: new Uint8Array() });
+      sawEnd = true;
+      if (offset !== bytes.length) throw new Error("Invalid JPEG structure: unexpected data follows EOI.");
       break;
     }
     if (marker === 0xda) {
+      if (offset + 1 >= bytes.length) throw new Error("Invalid JPEG structure: scan header is truncated.");
       const length = ((bytes[offset] ?? 0) << 8) | (bytes[offset + 1] ?? 0);
+      if (length < 2 || offset + length > bytes.length) throw new Error("Invalid JPEG structure: scan header length is invalid.");
       const headerEnd = offset + length;
+      let hasEndMarker = false;
+      for (let index = headerEnd; index + 1 < bytes.length; index += 1) {
+        if (bytes[index] === 0xff && bytes[index + 1] === 0xd9) {
+          hasEndMarker = true;
+          break;
+        }
+      }
+      if (!hasEndMarker) throw new Error("Invalid JPEG structure: EOI is missing.");
       segments.push({ start, end: bytes.length, marker, payload: bytes.subarray(offset + 2, headerEnd) });
+      sawEnd = true;
       break;
     }
     if ((marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
       segments.push({ start, end: offset, marker, payload: new Uint8Array() });
       continue;
     }
-    if (offset + 1 >= bytes.length) break;
+    if (offset + 1 >= bytes.length) throw new Error("Invalid JPEG structure: segment length is truncated.");
     const length = ((bytes[offset] ?? 0) << 8) | (bytes[offset + 1] ?? 0);
-    if (length < 2 || offset + length > bytes.length) break;
+    if (length < 2 || offset + length > bytes.length) throw new Error("Invalid JPEG structure: segment length is invalid.");
     const end = offset + length;
     segments.push({ start, end, marker, payload: bytes.subarray(offset + 2, end) });
     offset = end;
   }
+  if (!sawEnd) throw new Error("Invalid JPEG structure: EOI is missing.");
   return segments;
 }
 
@@ -107,12 +123,16 @@ export function inspectPng(bytes: Uint8Array): ImageInspection {
   const removableOffsets = new Set<number>();
   const chunks: Array<{ start: number; end: number; type: string }> = [];
   let offset = 8;
+  let sawEnd = false;
 
-  while (offset + 12 <= bytes.length) {
+  while (offset < bytes.length) {
+    if (offset + 12 > bytes.length) throw new Error("Invalid PNG structure: a chunk header is truncated.");
     const length = readUint32BE(bytes, offset);
     const type = ascii(bytes, offset + 4, offset + 8);
     const end = offset + 12 + length;
-    if (end > bytes.length) break;
+    if (offset === 8 && (type !== "IHDR" || length !== 13)) throw new Error("Invalid PNG structure: IHDR must be the first 13-byte chunk.");
+    if (end > bytes.length) throw new Error("Invalid PNG structure: a chunk is truncated.");
+    if (type === "IEND" && length !== 0) throw new Error("Invalid PNG structure: IEND must be empty.");
     chunks.push({ start: offset, end, type });
 
     if (type === "eXIf") {
@@ -129,8 +149,13 @@ export function inspectPng(bytes: Uint8Array): ImageInspection {
     }
 
     offset = end;
-    if (type === "IEND") break;
+    if (type === "IEND") {
+      sawEnd = true;
+      if (offset !== bytes.length) throw new Error("Invalid PNG structure: unexpected data follows IEND.");
+      break;
+    }
   }
+  if (!sawEnd) throw new Error("Invalid PNG structure: IEND is missing.");
 
   return {
     findings,
@@ -146,18 +171,21 @@ export function inspectPng(bytes: Uint8Array): ImageInspection {
 
 export function inspectWebp(bytes: Uint8Array): ImageInspection {
   if (ascii(bytes, 0, 4) !== "RIFF" || ascii(bytes, 8, 12) !== "WEBP") throw new Error("Invalid WebP signature");
+  const riffEnd = readUint32LE(bytes, 4) + 8;
+  if (riffEnd !== bytes.length || riffEnd < 12) throw new Error("Invalid WebP structure: RIFF size does not match the file.");
   const findings: FileFinding[] = [];
   const removableOffsets = new Set<number>();
   const chunks: Array<{ start: number; end: number; type: string; dataStart: number; dataEnd: number }> = [];
   let offset = 12;
 
-  while (offset + 8 <= bytes.length) {
+  while (offset < riffEnd) {
+    if (offset + 8 > riffEnd) throw new Error("Invalid WebP structure: chunk header is truncated.");
     const type = ascii(bytes, offset, offset + 4);
     const size = readUint32LE(bytes, offset + 4);
     const dataStart = offset + 8;
     const dataEnd = dataStart + size;
     const end = dataEnd + (size % 2);
-    if (end > bytes.length) break;
+    if (end > riffEnd) throw new Error("Invalid WebP structure: chunk length exceeds the RIFF boundary.");
     chunks.push({ start: offset, end, type, dataStart, dataEnd });
 
     if (type === "EXIF") {
@@ -171,6 +199,7 @@ export function inspectWebp(bytes: Uint8Array): ImageInspection {
     }
     offset = end;
   }
+  if (offset !== riffEnd) throw new Error("Invalid WebP structure: chunk boundary is invalid.");
 
   return {
     findings,

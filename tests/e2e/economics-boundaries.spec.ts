@@ -8,8 +8,9 @@ function pngChunk(type: string, data: Uint8Array = Buffer.alloc(0)) {
   return Buffer.concat([length, typeBytes, data, Buffer.alloc(4)]);
 }
 function pngOfSize(size: number) {
-  if (size < 32) throw new Error("PNG fixture size is too small");
-  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk("ruSt", Buffer.alloc(size - 32)), pngChunk("IEND")]);
+  if (size < 57) throw new Error("PNG fixture size is too small");
+  const ihdr = pngChunk("IHDR", Buffer.from([0,0,0,1,0,0,0,1,8,6,0,0,0]));
+  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), ihdr, pngChunk("ruSt", Buffer.alloc(size - 57)), pngChunk("IEND")]);
 }
 
 async function open(page: import("@playwright/test").Page) {
