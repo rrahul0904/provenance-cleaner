@@ -164,12 +164,7 @@ Phase C:
 
 ## Verification state
 
-As of this branch creation, the source behavior and license boundary are researched and mapped.
-The native StyleBalanceMeter is **not yet implemented**. No implementation, hosted, detector-evasion
-or production-readiness claim should be made from this document alone.
-
-## Smallest next executable change
-
-Add `src/lib/style-balance-meter.ts` plus unit tests for the independent Phase A metric contract,
-using only synthetic fixtures initially. Do not add a reference corpus until its provenance/license
-manifest exists.
+This research note records the clean-room contract at the time of the initial analysis. The native
+implementation and its current verification are recorded in
+[`docs/release/phase5-style-balance.md`](../release/phase5-style-balance.md); that receipt supersedes
+the original “not yet implemented” status above.
