@@ -1,6 +1,6 @@
 # Phase 5 — StyleBalanceMeter
 
-**Status:** Implemented and locally certified; production verification remains unavailable until the exact-source deployment blocker is cleared.
+**Status:** Merged and CI verified; production verification remains blocked by the canonical deployment serving an older source revision.
 
 ## Contract
 
@@ -24,7 +24,7 @@
 | StyleBalanceMeter unit suite | 27 tests passed |
 | Developer API route integration | Covered by `tests/security-route-behavior.test.ts`; style receipt re-verification added in this phase |
 | Browser UI | `style balance provides local, bounded measurements without authorship labels` passed in Chromium CI |
-| Protected CI and release certification | Pending for this documentation/test slice |
-| Production | Not verified; current-state exact-source deployment blocker remains |
+| Protected CI and release certification | Passed. PR [#50](https://github.com/rrahul0904/provenance-cleaner/pull/50) merged as `3c35682edaadc1f7cfcbea64a7e80355f9ff7576`; `verify`, `e2e`, and `certify` passed, as did post-merge main CI run [38612240191](https://github.com/rrahul0904/provenance-cleaner/actions/runs/38612240191) |
+| Production | Failed exact-source verification. For the merged release commit, production expected SHA `3c35682edaadc1f7cfcbea64a7e80355f9ff7576` and source hash `6887ecf2e73b20f6e3f1fdbe242e26e01f6d6c9f037f408f985179dce616fa6d`; canonical production reports SHA `173074b71130fc08051ac86bee43dd6b0c33e2ef` and source hash `3e7bc99180c04a743b22fcf09e36868be59473aa55c4a081778d9503acd54e17`. Health is `ok` and readiness is `ready`, but production is not verified. The GitHub `production` environment has no configured secrets; the controlled Vercel workflow requires `VERCEL_TOKEN`. |
 
 See [the donor analysis](../reverse-engineering/quiron-style-balance-meter.md) for the clean-room boundary and [the Phase 4 receipt](phase4-safe-transformation.md) for the deployed-source blocker.
