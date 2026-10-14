@@ -82,7 +82,11 @@ test("paid rewrite result survives switching away from and back to the workbench
 test("local scan remains usable offline while server-authoritative actions are disabled", async ({ page }) => {
   await open(page);
   const scanner = page.getByRole("region", { name: "Provenance text scanner" });
-  await scanner.getByLabel("Text to scan").fill("Offline\u200B inspection remains local.");
+  // Click a hydrated client control before editing the controlled textarea.
+  await scanner.getByRole("button", { name: "Try example" }).click();
+  const textInput = scanner.getByLabel("Text to scan");
+  await textInput.fill("Offline\u200B inspection remains local.");
+  await expect(textInput).toHaveValue("Offline\u200B inspection remains local.");
   await page.context().setOffline(true);
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
   await expect(scanner.getByText(/Offline · local inspection ready/)).toBeVisible();

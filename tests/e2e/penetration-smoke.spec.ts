@@ -5,9 +5,10 @@ test("auth callback rejects protocol-relative open redirects", async ({ request 
   expect([302, 303, 307, 308]).toContain(response.status());
   const location = response.headers()["location"];
   expect(location).toBeTruthy();
-  const redirected = new URL(location!, "http://127.0.0.1:3000");
+  const requestOrigin = new URL(response.url()).origin;
+  const redirected = new URL(location!, requestOrigin);
   expect(["localhost", "127.0.0.1"]).toContain(redirected.hostname);
-  expect(redirected.port).toBe("3000");
+  expect(redirected.port).toBe(new URL(response.url()).port);
   expect(location).not.toContain("evil.example");
 });
 
