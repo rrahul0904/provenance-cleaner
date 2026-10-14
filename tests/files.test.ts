@@ -50,9 +50,25 @@ describe("file provenance engine", () => {
     expect(cleaned.after.summary.privacyMetadata).toBe(0);
   });
 
+  it("rejects JPEG segments without valid bounds or a terminal marker", () => {
+    const truncatedSegment = u8(0xff, 0xd8, 0xff, 0xe1, 0x00, 0x20, 0x45);
+    const missingEnd = jpegSegment(0xe1, text("ordinary metadata"));
+    const jpegWithoutEnd = concatBytes([u8(0xff, 0xd8), missingEnd]);
+    const scannedJpegWithTrailingData = concatBytes([
+      u8(0xff, 0xd8),
+      jpegSegment(0xda, u8(0x01, 0x01)),
+      u8(0x11, 0xff, 0x00, 0x22, 0xff, 0xd9, 0x00),
+    ]);
+
+    expect(() => inspectFile(truncatedSegment, "truncated.jpg")).toThrow(/segment length is invalid/i);
+    expect(() => sanitizeFile(jpegWithoutEnd, "incomplete.jpg")).toThrow(/EOI is missing/i);
+    expect(() => inspectFile(scannedJpegWithTrailingData, "trailing.jpg")).toThrow(/unexpected data follows EOI/i);
+  });
+
   it("blocks PNG sanitization when caBX provenance is present", () => {
     const png = concatBytes([
       u8(137, 80, 78, 71, 13, 10, 26, 10),
+      pngChunk("IHDR", u8(0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0)),
       pngChunk("tEXt", text("Author\0Example")),
       pngChunk("caBX", text("provenance")),
       pngChunk("IEND"),
@@ -62,6 +78,36 @@ describe("file provenance engine", () => {
     expect(receipt.summary.provenance).toBe(1);
     expect(receipt.capabilities.sanitize).toBe(false);
     expect(() => sanitizeFile(png, "image.png")).toThrow(/cryptographically bound/i);
+  });
+
+  it("removes PNG privacy metadata while retaining required structural chunks", () => {
+    const png = concatBytes([
+      u8(137, 80, 78, 71, 13, 10, 26, 10),
+      pngChunk("IHDR", u8(0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0)),
+      pngChunk("tEXt", text("Author\0Example")),
+      pngChunk("IDAT", u8(1, 2, 3)),
+      pngChunk("IEND"),
+    ]);
+    const cleaned = sanitizeFile(png, "image.png");
+
+    expect(cleaned.before.summary.privacyMetadata).toBe(1);
+    expect(cleaned.after.summary.privacyMetadata).toBe(0);
+    expect(cleaned.output).toEqual(concatBytes([
+      u8(137, 80, 78, 71, 13, 10, 26, 10),
+      pngChunk("IHDR", u8(0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0)),
+      pngChunk("IDAT", u8(1, 2, 3)),
+      pngChunk("IEND"),
+    ]));
+  });
+
+  it("rejects PNGs with a truncated chunk or missing IEND", () => {
+    const signature = u8(137, 80, 78, 71, 13, 10, 26, 10);
+    const header = pngChunk("IHDR", u8(0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0));
+    const truncated = concatBytes([signature, header, u8(0, 0, 0, 20), text("tEXt"), u8(1)]);
+    const missingEnd = concatBytes([signature, header, pngChunk("tEXt", text("Author\0Example"))]);
+
+    expect(() => inspectFile(truncated, "truncated.png")).toThrow(/chunk (header )?is truncated/i);
+    expect(() => sanitizeFile(missingEnd, "incomplete.png")).toThrow(/IEND is missing/i);
   });
 
   it("clears WebP EXIF/XMP chunks and their VP8X flags", () => {
@@ -74,6 +120,14 @@ describe("file provenance engine", () => {
     const cleaned = sanitizeFile(webp, "image.webp");
     expect(cleaned.before.summary.privacyMetadata).toBe(2);
     expect(cleaned.after.summary.privacyMetadata).toBe(0);
+  });
+
+  it("rejects WebP files whose RIFF size does not match the chunk data", () => {
+    const body = webpChunk("VP8X", u8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+    const declared = body.length + 4;
+    const webp = concatBytes([text("RIFF"), u8(declared & 0xff, (declared >>> 8) & 0xff, (declared >>> 16) & 0xff, (declared >>> 24) & 0xff), text("WEBP"), body]);
+
+    expect(() => inspectFile(webp.subarray(0, webp.length - 1), "truncated.webp")).toThrow(/RIFF size does not match/i);
   });
 
   it("keeps PDF sanitization disabled while reporting document metadata", () => {

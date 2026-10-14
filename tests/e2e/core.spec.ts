@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 function pngChunk(type: string, data: Uint8Array = Buffer.alloc(0)) { const typeBytes = Buffer.from(type, "ascii"); const length = Buffer.alloc(4); length.writeUInt32BE(data.length); return Buffer.concat([length, typeBytes, data, Buffer.alloc(4)]); }
-function pngWith(type: string, data: Uint8Array) { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk(type, data), pngChunk("IEND")]); }
-function cleanPng() { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk("IEND")]); }
+function pngHeader() { return pngChunk("IHDR", Buffer.from([0,0,0,1,0,0,0,1,8,6,0,0,0])); }
+function pngWith(type: string, data: Uint8Array) { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngHeader(), pngChunk(type, data), pngChunk("IEND")]); }
+function cleanPng() { return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngHeader(), pngChunk("IEND")]); }
 async function open(page: import("@playwright/test").Page) {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: /Know what your content is carrying/i })).toBeVisible();
@@ -35,6 +36,17 @@ test("non-printing controls are review findings and are not silently cleaned", a
   await expect(scanner.getByRole("heading", { name: "1 finding" })).toBeVisible();
   await expect(scanner.getByText("0 safe removals · 1 item to review")).toBeVisible();
   await expect(scanner.getByRole("button", { name: /U\+0090 C1 CONTROL/ })).toBeVisible();
+});
+
+test("malformed image structure is rejected during local file inspection", async ({ page }) => {
+  await open(page);
+  await selectMode(page, "Files");
+  const fileRegion = page.getByRole("region", { name: "File metadata scanner" });
+  const input = fileRegion.locator('input[type="file"]');
+  await input.setInputFiles({ name: "truncated.png", mimeType: "image/png", buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]) });
+  await fileRegion.getByRole("button", { name: "Inspect file" }).click();
+  await expect(fileRegion.getByText(/Invalid PNG structure/)).toBeVisible();
+  await expect(fileRegion.getByRole("button", { name: "Sanitize privacy metadata · 1 unit" })).toBeDisabled();
 });
 
 test("file metadata cleaning is server-authoritative and provenance blocks destructive action", async ({ page }) => {

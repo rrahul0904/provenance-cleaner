@@ -11,7 +11,7 @@ Provenance Cleaner is a content-integrity workbench for inspecting text and supp
 | Capability | Contract |
 | --- | --- |
 | Inspect | Deterministic Unicode/text checks and supported file metadata/provenance inspection explain findings. C0/C1 control characters are flagged for review; tabs, line feeds, carriage returns, and next-line whitespace are preserved. Inspection is free and local-first where supported. |
-| Sanitize | Sanitation is a separate, explicit action. Text and supported file sanitation are server-authoritative when credits apply; signed provenance blocks a destructive sanitation operation. |
+| Sanitize | Sanitation is a separate, explicit action. Text and supported file sanitation are server-authoritative when credits apply; signed provenance and Office package signatures block destructive sanitation. Malformed supported-file structures fail before billing. |
 | Transform | Semantic editing occurs only after an explicit user action. Light/Balanced/Strong intent and purpose control the request. Protected names, dates, numbers, percentages, quotes, citations and other extracted invariants are checked before acceptance. Model output is untrusted until validation passes. |
 | Verify and receipt | Receipts identify the input/output artifact with hashes and operation metadata. Verification must recompute integrity rather than trust mutable UI state. |
 | Export | Users can copy/download outputs and receipts; source content is not intentionally retained as account history. |

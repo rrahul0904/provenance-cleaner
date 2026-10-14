@@ -11,7 +11,7 @@ const MAX_DOCX_COMPRESSION_RATIO = 250;
 function unzipDocxSafely(bytes: Uint8Array) {
   let entryCount = 0;
   let totalUncompressed = 0;
-  unzipSync(bytes, {
+  const zip = unzipSync(bytes, {
     filter(info) {
       entryCount += 1;
       if (entryCount > MAX_DOCX_ENTRIES) throw new Error("DOCX package contains too many entries.");
@@ -21,10 +21,13 @@ function unzipDocxSafely(bytes: Uint8Array) {
       const ratio = info.size === 0 ? (info.originalSize === 0 ? 1 : Number.POSITIVE_INFINITY) : info.originalSize / info.size;
       if (ratio > MAX_DOCX_COMPRESSION_RATIO) throw new Error("DOCX package has a suspicious compression ratio.");
       if (info.name.startsWith("/") || info.name.includes("../") || info.name.includes("..\\")) throw new Error("DOCX package contains an unsafe entry path.");
-      return false;
+      return true;
     },
   });
-  return unzipSync(bytes);
+  if (!zip["[Content_Types].xml"] || !zip["word/document.xml"]) {
+    throw new Error("DOCX package is missing required document parts.");
+  }
+  return zip;
 }
 
 function hasMeaningfulContent(xml: string, tags: string[]) {
@@ -49,6 +52,8 @@ export function inspectDocx(bytes: Uint8Array): FileFinding[] {
   const core = zip["docProps/core.xml"] ? strFromU8(zip["docProps/core.xml"]) : "";
   const app = zip["docProps/app.xml"] ? strFromU8(zip["docProps/app.xml"]) : "";
   const custom = zip["docProps/custom.xml"] ? strFromU8(zip["docProps/custom.xml"]) : "";
+  const signaturePaths = Object.keys(zip).filter((path) => /^_xmlsignatures\//i.test(path));
+  const packageSignature = zip["[Content_Types].xml"] && /digital-signature/i.test(strFromU8(zip["[Content_Types].xml"]));
 
   if (core && hasMeaningfulContent(core, CORE_FIELDS)) {
     findings.push({ id: "docx-core", kind: "office_core", disposition: "privacy_metadata", label: "DOCX core properties", description: "Author, editor, title, timestamps, keywords, or other core document properties are present.", removableByDefault: true });
@@ -58,6 +63,9 @@ export function inspectDocx(bytes: Uint8Array): FileFinding[] {
   }
   if (custom && /<property\b/i.test(custom)) {
     findings.push({ id: "docx-custom", kind: "office_custom", disposition: "privacy_metadata", label: "DOCX custom properties", description: "Custom Office properties are embedded in the package.", removableByDefault: true });
+  }
+  if (signaturePaths.length > 0 || packageSignature) {
+    findings.push({ id: "docx-signature", kind: "provenance_manifest", disposition: "provenance", label: "Office package signature", description: "The package contains an Office digital-signature part. Rewriting the document can invalidate its signature, so sanitation is blocked.", removableByDefault: false });
   }
   return findings;
 }
